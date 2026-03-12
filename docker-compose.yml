@@ -1,0 +1,62 @@
+# ============================================================
+# StudyRAG Docker Compose 编排
+# 启动: docker compose up -d
+# 停止: docker compose down
+# ============================================================
+
+services:
+  # ---- Chroma 向量数据库 ----
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: studyrag-chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      # 数据持久化到宿主机
+      - ./backend/data/chroma:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- FastAPI 后端 ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: studyrag-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载源码目录，支持热重载开发
+      - ./backend:/app
+      # 上传文件持久化
+      - ./backend/data/uploads:/app/data/uploads
+    env_file:
+      - .env
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - UPLOAD_DIR=/app/data/uploads
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      chroma:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ---- React 前端（后续步骤启用） ----
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: studyrag-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend

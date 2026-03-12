@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(rm -f src/App.css src/index.css)",
+      "Bash(rm -rf src/assets)",
+      "Bash(cp ../.env .env)",
+      "Bash(pip install *)",
+      "Bash(pip show *)",
+      "Bash(python -m pytest tests/test_health.py -v)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(where docker *)",
+      "Bash(timeout 5 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

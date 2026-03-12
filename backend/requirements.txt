@@ -1,0 +1,28 @@
+# ============================================================
+# StudyRAG 后端依赖
+# ============================================================
+
+# --- Web 框架 ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.19
+
+# --- LangChain 全家桶（按步骤逐步引入） ---
+langchain==0.3.14
+langchain-openai==0.2.14
+langchain-chroma==0.2.1
+langchain-community==0.3.14
+
+# --- 文档解析 ---
+pymupdf==1.25.1
+
+# --- 配置管理 ---
+pydantic-settings==2.7.1
+
+# --- Chroma 客户端 ---
+chromadb==0.5.23
+
+# --- 测试 ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
