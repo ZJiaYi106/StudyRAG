@@ -15,7 +15,10 @@
       "Bash(where docker *)",
       "Bash(timeout 5 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000)",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python -c ' *)",
+      "Bash(python -m pytest tests/test_loader.py -v)",
+      "Bash(python *)"
     ]
   }
 }
