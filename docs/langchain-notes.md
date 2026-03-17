@@ -8,7 +8,7 @@
 ## 目录
 
 - [x] 1. Document Loader（步骤 2）
-- [ ] 2. Text Splitter（步骤 3）
+- [x] 2. Text Splitter（步骤 3）
 - [ ] 3. Embeddings（步骤 4）
 - [ ] 4. Chroma VectorStore（步骤 4）
 - [ ] 5. Retriever（步骤 6）
@@ -136,4 +136,127 @@ for doc in docs:
 for doc in docs:
     doc.metadata["filename"] = "lecture.pdf"
     doc.metadata["document_id"] = "abc-123"
+```
+
+---
+
+## 2. Text Splitter（文本切分器）
+
+### 组件作用
+
+将 Document Loader 产出的长 Document 切分为固定大小的 **chunk**（文本片段）。chunk 是向量检索的最小单元——chunk 太大检索不精确，太小语义不完整。
+
+核心挑战：在固定字数限制内，尽可能在"自然边界"（段落、句子、标题）处切断，避免把一个完整语义切成两半。
+
+### 核心参数
+
+| 参数 | 说明 | 本项目默认值 |
+|------|------|-------------|
+| `chunk_size` | 每个 chunk 的最大字符数 | 1000 |
+| `chunk_overlap` | 相邻 chunk 的重叠字符数 | 200 |
+| `separators` | 分隔符优先级列表 | PDF 和 MD 各有一套 |
+
+**chunk_overlap 为什么重要？**
+
+```
+文档: "......关键信息A。关键信息B......"
+         ↑_____chunk_1_____↑
+                  ↑_____chunk_2_____↑
+                  ← 重叠区域 →
+```
+
+如果不重叠，关键信息 B 被切在 chunk_1 末尾、chunk_2 开头，检索时可能因语义不完整而匹配不到。`overlap=200` 让相邻 chunk 各包含一部分对方的内容，大幅降低漏检率。
+
+### 递归切分算法
+
+`RecursiveCharacterTextSplitter` 的工作方式：
+
+1. 用 `separators[0]`（如 `\n\n`）尝试切分
+2. 如果某个片段仍大于 `chunk_size`，用 `separators[1]`（如 `\n`）继续切
+3. 递归下去，直到每个片段 ≤ `chunk_size`，或到最后用 `""` 逐字符切分
+
+```
+优先级: \n\n → \n → 。 → . → " " → ""（逐字符）
+越靠前的分隔符越"自然"
+```
+
+### 本项目中的双策略设计
+
+PDF 和 Markdown 使用不同的分隔符优先级：
+
+```python
+# PDF：段落 → 句子 → 逗号 → 字符
+PDF_SEPARATORS = ["\n\n", "\n", "。", ". ", "；", "，", " ", ""]
+
+# Markdown：标题 → 代码块 → 段落 → 句子 → 字符
+MARKDOWN_SEPARATORS = [
+    "\n## ", "\n### ", "\n#### ",   # 优先在二级标题前切断
+    "\n```\n",                        # 代码块边界
+    "\n\n", "\n", "。", ". ", " ", ""
+]
+```
+
+为什么 Markdown 把 `\n## ` 放在最前面？因为如果不在标题前切断，一个 chunk 可能包含"1.2 节的后半 + 1.3 节的前半"，检索结果会显示错误的章节来源。
+
+### 不用 LangChain 需要手写什么？
+
+```python
+def manual_split(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """手写滑动窗口切分 —— LangChain 的 RecursiveCharacterTextSplitter 替我们做了这些"""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap  # 滑动窗口，有重叠
+    return chunks
+    # ← 但这样做不到"在自然边界切断"，会在任意字符中间切断
+    # RecursiveCharacterTextSplitter 额外做了：递归尝试多种分隔符
+```
+
+**LangChain 替我们做的**：
+1. 递归尝试多种分隔符，优先在自然边界切断
+2. metadata 从父 Document 自动继承到每个 chunk
+3. `chunk_overlap` 的滑动窗口逻辑
+4. 长度度量和边界处理
+
+### metadata 继承机制
+
+这是 LangChain 最巧妙的设计之一。split_documents() 内部会调用 `copy()` 复制父 metadata：
+
+```python
+# LangChain 内部大致逻辑（简化版）
+for parent_doc in docs:
+    for chunk_text in split_text(parent_doc.page_content):
+        new_doc = Document(
+            page_content=chunk_text,
+            metadata=parent_doc.metadata.copy()  # ← 自动继承！
+        )
+        yield new_doc
+```
+
+所以 Loader 阶段注入的 `document_id`、`filename`、`page`、`chapter`，到了 Splitter 阶段每个 chunk 都会自动带着——这就是引用溯源的保证。
+
+### 最小示例
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+
+# 1. 创建 Splitter
+splitter = RecursiveCharacterTextSplitter(
+    separators=["\n\n", "\n", "。", " ", ""],
+    chunk_size=1000,
+    chunk_overlap=200,
+)
+
+# 2. 切分文档
+docs = [Document(page_content="很长的文本..." * 500, metadata={"source": "test.pdf"})]
+chunks = splitter.split_documents(docs)
+
+# 3. 检查结果
+print(f"切分为 {len(chunks)} 个 chunk")
+print(f"第一个 chunk 长度: {len(chunks[0].page_content)}")
+print(f"metadata 已继承: {chunks[0].metadata}")  # 包含 source
 ```
