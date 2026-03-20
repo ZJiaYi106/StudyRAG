@@ -9,8 +9,8 @@
 
 - [x] 1. Document Loader（步骤 2）
 - [x] 2. Text Splitter（步骤 3）
-- [ ] 3. Embeddings（步骤 4）
-- [ ] 4. Chroma VectorStore（步骤 4）
+- [x] 3. Embeddings（步骤 4）
+- [x] 4. Chroma VectorStore（步骤 4）
 - [ ] 5. Retriever（步骤 6）
 - [ ] 6. PromptTemplate（步骤 6）
 - [ ] 7. Runnable / LCEL（步骤 7）
@@ -259,4 +259,198 @@ chunks = splitter.split_documents(docs)
 print(f"切分为 {len(chunks)} 个 chunk")
 print(f"第一个 chunk 长度: {len(chunks[0].page_content)}")
 print(f"metadata 已继承: {chunks[0].metadata}")  # 包含 source
+```
+
+---
+
+## 3. Embeddings（文本向量化）
+
+### 组件作用
+
+将自然语言文本转换为**固定维度的数值向量**。这是 RAG 的"桥梁"——人类语言和数学计算之间的翻译器。
+
+```
+"深度学习是什么？" → Embedding 模型 → [0.012, -0.034, 0.056, ...]（1536 维）
+```
+
+**核心原理**：语义相近的文本，其向量在空间中距离近（余弦相似度高）。因此向量化让我们可以用"计算距离"代替"理解语义"来做检索。
+
+### 本项目用的 Embedding 服务
+
+```python
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",     # 1536 维
+    openai_api_key="sk-xxx",
+    openai_api_base="https://api.openai.com/v1",  # 换成兼容服务的地址
+)
+```
+
+- **输入**：`embed_documents(["文本1", "文本2", ...])` 或 `embed_query("单个查询")`
+- **输出**：`List[List[float]]`（每个文本一个 1536 维向量）
+- **openai_api_base**：支持任何 OpenAI API 兼容的 Embedding 服务（本地 vLLM、Ollama 等）
+
+### embed_documents vs embed_query
+
+LangChain 将两者分开，允许使用不同的预处理策略：
+
+| 方法 | 用途 | 输入 | 典型预处理 |
+|------|------|------|-----------|
+| `embed_documents` | 文档入库 | `List[str]` | 不做任务前缀 |
+| `embed_query` | 查询向量化 | `str` | 可能加 "search_query:" 前缀 |
+
+对于 OpenAI 模型这两者行为相同，但某些模型（如 BGE）会区分。
+
+### 不用 LangChain 需要手写什么？
+
+```python
+import requests
+
+def manual_embed(texts: list[str]) -> list[list[float]]:
+    """手写调用 /v1/embeddings API"""
+    resp = requests.post(
+        "https://api.openai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"model": "text-embedding-3-small", "input": texts},
+    )
+    return [item["embedding"] for item in resp.json()["data"]]
+    # ← OpenAIEmbeddings 替我们做了：鉴权、重试、batch 优化、错误处理
+```
+
+### 最小示例
+
+```python
+from langchain_openai import OpenAIEmbeddings
+
+# 1. 初始化
+emb = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    openai_api_key="sk-xxx",
+)
+
+# 2. 批量向量化（入库用）
+docs = ["Transformer 是一种深度学习架构", "RNN 存在梯度消失问题"]
+vectors = emb.embed_documents(docs)
+print(f"向量数: {len(vectors)}, 维度: {len(vectors[0])}")  # 2, 1536
+
+# 3. 单条向量化（查询用）
+query_vec = emb.embed_query("什么是 Transformer？")
+# query_vec 和 vectors[0] 的内积 > vectors[1] 的内积（语义更近）
+```
+
+---
+
+## 4. Chroma VectorStore（向量存储）
+
+### 组件作用
+
+存储文档的**向量 + 原文 + 元数据**，并提供**相似度检索**。它是 RAG 的"资料库"——用户提问时，在这里找最相关的资料片段。
+
+### Chroma 简介
+
+Chroma 是一个轻量级开源向量数据库，专门为 LLM 应用设计：
+
+- **零配置**：内嵌模式一行代码启动，无需独立服务
+- **自动向量化**：配合 LangChain 的 `add_documents()`，自动调用 Embeddings 向量化
+- **元数据过滤**：支持 `WHERE` 条件查询（如按 document_id 删除）
+- **持久化**：数据存本地磁盘，重启不丢失
+
+### 本项目两种部署模式
+
+| 模式 | 适用场景 | 本项目用法 |
+|------|---------|-----------|
+| 持久化内嵌 | 单机开发 / MVP | 默认模式，数据存 `backend/data/chroma/` |
+| HTTP 客户端 | 生产 / 多副本 | `docker compose` 中的独立 Chroma 容器 |
+
+```python
+from langchain_chroma import Chroma
+
+# 持久化内嵌模式
+store = Chroma(
+    embedding_function=embeddings,      # 向量化函数
+    persist_directory="./data/chroma",  # 数据存放路径
+    collection_name="studyarag_docs",   # 集合名
+)
+```
+
+### 核心操作
+
+```
+┌─────────────────────────────────────────────────────┐
+│  add_documents([Document, ...])                      │
+│  文档入库：向量化 + 存储文本 + 存储元数据              │
+│                                                      │
+│  similarity_search_with_score("什么是RAG？", k=4)    │
+│  检索：问题向量化 → 计算距离 → 返回 Top-K + 分数     │
+│                                                      │
+│  delete(where={"document_id": "xxx"})                │
+│  删除：按元数据条件批量删除                           │
+└─────────────────────────────────────────────────────┘
+```
+
+### Chroma 内部存储结构
+
+每个 Collection 内部是一张表：
+
+| id (UUID) | embedding (Vector) | document (Text) | metadata (JSON) |
+|-----------|--------------------|-----------------|-----------------|
+| `abc...` | `[0.01, -0.03, ...]` | "Transformer 是..." | `{filename, page, document_id}` |
+| `def...` | `[0.05, 0.02, ...]` | "自注意力允许..." | `{filename, page, document_id}` |
+
+检索时，Chroma 计算 query 的向量与所有 embedding 列的距离，返回最近 K 行。
+
+### 不用 LangChain 需要手写什么？
+
+```python
+# 手写向量存储 = 管理向量数组 + 手写余弦相似度
+import numpy as np
+class ManualVectorDB:
+    def __init__(self):
+        self.vectors = []    # 向量数组
+        self.texts = []      # 对应文本
+        self.metas = []      # 对应元数据
+
+    def add(self, text, meta, vec):
+        self.vectors.append(vec)
+        self.texts.append(text)
+        self.metas.append(meta)
+
+    def search(self, query_vec, k=4):
+        # 手写余弦相似度计算
+        scores = [np.dot(query_vec, v) for v in self.vectors]
+        top_k = sorted(enumerate(scores), key=lambda x: -x[1])[:k]
+        return [(self.texts[i], self.metas[i], scores[i]) for i, s in top_k]
+# ← Chroma 替我们做了：持久化、索引优化、元数据过滤、并发安全
+```
+
+### 最小示例
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
+# 1. 初始化
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+store = Chroma(
+    embedding_function=embeddings,
+    persist_directory="./chroma_data",
+    collection_name="my_docs",
+)
+
+# 2. 入库（自动向量化）
+docs = [
+    Document(page_content="Transformer 使用自注意力机制", metadata={"source": "paper.pdf", "page": 1}),
+    Document(page_content="BERT 基于双向 Transformer", metadata={"source": "paper.pdf", "page": 2}),
+]
+store.add_documents(docs)
+
+# 3. 检索（返回 Document + 相似度分数）
+results = store.similarity_search_with_score("注意力机制", k=2)
+for doc, score in results:
+    print(f"[{score:.4f}] {doc.page_content[:50]}... (来源: {doc.metadata['source']} p{doc.metadata['page']})")
+
+# 4. 按条件删除
+store.delete(where={"source": "paper.pdf"})
 ```
