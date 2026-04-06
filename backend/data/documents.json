@@ -1,0 +1,50 @@
+[
+  {
+    "id": "5824274498f849d18540ab0a9153bc36",
+    "filename": "test.pdf",
+    "file_type": "pdf",
+    "page_count": 2,
+    "chunk_count": 3,
+    "created_at": "2026-07-23T16:33:46.562559"
+  },
+  {
+    "id": "cdd4ce57c78c4ef8a72627262deb887c",
+    "filename": "notes.md",
+    "file_type": "markdown",
+    "page_count": 1,
+    "chunk_count": 1,
+    "created_at": "2026-07-23T16:33:46.572287"
+  },
+  {
+    "id": "ba74523cf49d4262b425ad1bbb8ec8ec",
+    "filename": "test.pdf",
+    "file_type": "pdf",
+    "page_count": 2,
+    "chunk_count": 3,
+    "created_at": "2026-07-23T16:34:23.464301"
+  },
+  {
+    "id": "0236ddd474aa48d2be6be63a34462275",
+    "filename": "notes.md",
+    "file_type": "markdown",
+    "page_count": 1,
+    "chunk_count": 1,
+    "created_at": "2026-07-23T16:34:23.495756"
+  },
+  {
+    "id": "087f3ab14d094aad9cb8e1467303fce2",
+    "filename": "test.pdf",
+    "file_type": "pdf",
+    "page_count": 2,
+    "chunk_count": 3,
+    "created_at": "2026-07-23T16:34:39.271252"
+  },
+  {
+    "id": "08f13071f12e4e5486df3c9e9b38412d",
+    "filename": "notes.md",
+    "file_type": "markdown",
+    "page_count": 1,
+    "chunk_count": 1,
+    "created_at": "2026-07-23T16:34:39.276756"
+  }
+]

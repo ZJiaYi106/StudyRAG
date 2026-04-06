@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     chroma_collection: str = "studyarag_docs"
 
     # --- 上传文件存储路径 ---
-    upload_dir: str = "/app/data/uploads"
+    # 默认值指向 backend/data/uploads（本地开发），Docker 中通过环境变量覆盖
+    upload_dir: str = "data/uploads"
 
     # --- 文本切分参数 ---
     chunk_size: int = 1000

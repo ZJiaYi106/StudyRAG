@@ -4,6 +4,7 @@ StudyRAG FastAPI 应用入口
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -29,8 +30,11 @@ async def lifespan(app: FastAPI):
     logger.info("StudyRAG 启动中...")
     logger.info(f"LLM 模型: {settings.llm_model}")
     logger.info(f"Embedding 模型: {settings.embedding_model}")
-    logger.info(f"Chroma: {settings.chroma_host}:{settings.chroma_port}")
     logger.info(f"上传目录: {settings.upload_dir}")
+
+    # 确保上传目录存在
+    os.makedirs(settings.upload_dir, exist_ok=True)
+
     logger.info("=" * 50)
     yield
     # 关闭时
@@ -64,13 +68,23 @@ app.include_router(chat.router)
 @app.get("/api/health", tags=["系统"])
 async def health_check():
     """
-    健康检查：验证 API 服务是否正常运行。
-    后续步骤会加入 Chroma 和 LLM 的连接检查。
+    健康检查：验证 API、Chroma、文档数量。
     """
+    try:
+        from app.services.vectorstore import get_collection_stats
+        stats = get_collection_stats()
+        chroma_status = "ok"
+        doc_count = stats.get("count", 0)
+    except Exception as e:
+        chroma_status = f"error: {e}"
+        doc_count = 0
+
     return {
         "status": "ok",
         "service": "StudyRAG",
         "version": "0.1.0",
+        "chroma": chroma_status,
+        "document_count": doc_count,
     }
 
 

@@ -88,7 +88,7 @@ docker compose up -d
 | 2 | Document Loader（PDF/MD 加载与元数据提取） | ✅ 已完成 |
 | 3 | Text Splitter（文档切分策略） | ✅ 已完成 |
 | 4 | Embeddings + VectorStore（向量化与 Chroma 存储） | ✅ 已完成 |
-| 5 | 文档上传 API（Loader → Splitter → Embeddings → Store 管道） | 🔲 待开始 |
+| 5 | 文档上传 API（Loader → Splitter → Embeddings → Store 管道） | ✅ 已完成 |
 | 6 | Retriever + PromptTemplate（检索与 Prompt 构建） | 🔲 待开始 |
 | 7 | LCEL Chain + 问答 API | 🔲 待开始 |
 | 8 | 前端基础（上传、列表、问答 UI） | 🔲 待开始 |
