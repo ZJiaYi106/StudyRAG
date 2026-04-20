@@ -11,8 +11,8 @@
 - [x] 2. Text Splitter（步骤 3）
 - [x] 3. Embeddings（步骤 4）
 - [x] 4. Chroma VectorStore（步骤 4）
-- [ ] 5. Retriever（步骤 6）
-- [ ] 6. PromptTemplate（步骤 6）
+- [x] 5. Retriever（步骤 6）
+- [x] 6. PromptTemplate（步骤 6）
 - [ ] 7. Runnable / LCEL（步骤 7）
 
 ---
@@ -453,4 +453,175 @@ for doc, score in results:
 
 # 4. 按条件删除
 store.delete(where={"source": "paper.pdf"})
+```
+
+---
+
+## 5. Retriever（检索器）
+
+### 组件作用
+
+Retriever 是 VectorStore 的"查询接口"——它只负责**检索**，不负责存储。任何实现了 `invoke(query) → List[Document]` 的对象都可以作为 Retriever。
+
+### Retriever vs VectorStore
+
+```
+VectorStore   = 存储 + 检索（数据库）
+Retriever     = 仅检索（查询接口）
+```
+
+同一个 VectorStore 可以产出多种 Retriever：不同的 `k` 值、不同的过滤条件、不同的排序策略。这种分离让你可以为不同场景创建不同的检索器，而不影响底层数据。
+
+### 本项目的 Retriever 封装
+
+LangChain 提供了 `vectorstore.as_retriever()` 一键转换：
+
+```python
+retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+docs = retriever.invoke("什么是 RAG？")
+# 返回 List[Document]
+```
+
+但本项目手写了自己的 `retrieve()` 函数，原因是可以加入自定义逻辑：
+
+1. **结果格式化**：Document → dict（提取 excerpt、格式化字段名）
+2. **相似度阈值**：可配置的最低分数门槛（虽然 Chroma 用 L2 距离，阈值需根据模型调优）
+3. **日志可观测**：记录每次检索的耗时和结果数
+
+### 不用 LangChain 需要手写什么？
+
+```python
+def manual_retrieve(query: str, k: int = 4) -> list[dict]:
+    """手写检索 = query 向量化 + 遍历所有向量计算距离 + 排序取 Top-K"""
+    query_vec = embed_query(query)
+    scores = []
+    for i, doc_vec in enumerate(all_vectors):
+        # 余弦相似度（需自己实现）
+        sim = np.dot(query_vec, doc_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
+        scores.append((i, sim))
+    top_k = sorted(scores, key=lambda x: -x[1])[:k]
+    return [{"content": all_texts[i], "score": s} for i, s in top_k]
+# ← Chroma + LangChain 替我们做了：
+#   - 高效的向量索引（HNSW 算法），不需要遍历所有向量
+#   - 持久化和并发安全
+#   - 元数据过滤
+```
+
+### 最小示例
+
+```python
+from langchain_chroma import Chroma
+
+store = Chroma(persist_directory="./data", ...)
+
+# 方式 1：LangChain Retriever 接口（用于 LCEL Chain）
+retriever = store.as_retriever(search_kwargs={"k": 4})
+docs = retriever.invoke("什么是 RAG？")
+
+# 方式 2：直接调用（本项目方式）
+results = store.similarity_search_with_score("什么是 RAG？", k=4)
+for doc, score in results:
+    print(f"[{score:.4f}] {doc.metadata['filename']} — {doc.page_content[:80]}")
+```
+
+---
+
+## 6. PromptTemplate（Prompt 模板）
+
+### 组件作用
+
+将**动态变量**填入**预设的 Prompt 结构**。RAG 系统中最重要的 Prompt 设计是：如何把检索到的参考资料注入 LLM 的上下文。
+
+### ChatPromptTemplate 结构
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+template = ChatPromptTemplate.from_messages([
+    ("system", "你是 {role}。"),              # SystemMessage: 角色设定
+    ("human", "参考资料：{context}\n问题：{question}"),  # HumanMessage: 注入变量
+])
+
+# 填充变量 → ChatPromptValue → 发送给 LLM
+prompt_value = template.invoke({
+    "role": "课程助手",
+    "context": "[1] Transformer 是...",
+    "question": "什么是 Transformer？",
+})
+```
+
+- **输入**：变量 dict `{"context": ..., "question": ...}`
+- **输出**：`ChatPromptValue`（包含 SystemMessage + HumanMessage）
+
+### 本项目的 Prompt 设计
+
+```
+┌──────────────────────────────────────────┐
+│ SystemMessage                            │
+│                                          │
+│ 你是一个严谨的课程资料问答助手。           │
+│ 只能依据参考资料回答。                    │
+│ 每个观点标注来源编号 [1]、[2]。           │
+│ 资料不足时明确说明。                      │
+│ 使用简体中文。                           │
+├──────────────────────────────────────────┤
+│ HumanMessage                             │
+│                                          │
+│ ## 参考资料                              │
+│ [1] (来源: NLP讲义.pdf, 第3页)           │
+│ Transformer 是一种基于自注意力机制的...    │
+│                                          │
+│ [2] (来源: 笔记.md, 2.1 注意力机制)       │
+│ 自注意力机制允许模型...                   │
+│                                          │
+│ ## 用户问题                              │
+│ 什么是 Transformer？                     │
+└──────────────────────────────────────────┘
+```
+
+### 不用 LangChain 需要手写什么？
+
+```python
+def manual_prompt(context: str, question: str) -> list[dict]:
+    """手写 Prompt 构建 —— 就是字符串拼接 + 字典构造"""
+    system = "你是一个严谨的助手。只能依据参考资料回答。"
+    human = f"## 参考资料\n{context}\n\n## 用户问题\n{question}"
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": human},
+    ]
+# ← ChatPromptTemplate 替我们做的：
+#   - 变量验证（缺失变量会报错）
+#   - 消息类型管理（SystemMessage、HumanMessage、AIMessage）
+#   - 与 LangChain LLM 接口无缝衔接
+```
+
+### 关键设计决策
+
+1. **System Message 设定边界**：明确 LLM 不能用自己的知识，只能基于参考资料
+2. **引用编号 [N]**：要求 LLM 在回答中标注来源编号，方便用户追溯
+3. **兜底规则**：资料不足时拒绝回答，这是反幻觉的核心机制
+4. **中文约束**：确保 LLM 不会切换到英文
+
+### 最小示例
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+# 1. 定义模板
+template = ChatPromptTemplate.from_messages([
+    ("system", "你是一个{subject}专家，只基于给定资料回答。"),
+    ("human", "资料：{context}\n\n问题：{question}"),
+])
+
+# 2. 填充变量
+prompt_value = template.invoke({
+    "subject": "深度学习",
+    "context": "Transformer 使用自注意力机制来处理序列数据。",
+    "question": "Transformer 的核心机制是什么？",
+})
+
+# 3. 查看生成的 messages
+for msg in prompt_value.to_messages():
+    print(f"[{msg.type}] {msg.content[:100]}...")
 ```
