@@ -13,7 +13,7 @@
 - [x] 4. Chroma VectorStore（步骤 4）
 - [x] 5. Retriever（步骤 6）
 - [x] 6. PromptTemplate（步骤 6）
-- [ ] 7. Runnable / LCEL（步骤 7）
+- [x] 7. Runnable / LCEL（步骤 7）
 
 ---
 
@@ -625,3 +625,210 @@ prompt_value = template.invoke({
 for msg in prompt_value.to_messages():
     print(f"[{msg.type}] {msg.content[:100]}...")
 ```
+
+---
+
+## 7. Runnable / LCEL（LangChain Expression Language）
+
+### 组件作用
+
+LCEL 是 LangChain 的**组合语言**。用管道符 `|` 将多个 Runnable 组件串联，数据从左到右自动流经每个步骤。它是 LangChain 最核心的设计理念：**一切皆 Runnable，统一接口，任意组合**。
+
+### Runnable 接口
+
+任何 Runnable 都实现了两个方法：
+
+```python
+class Runnable:
+    def invoke(self, input, config=None) -> output:  # 同步执行
+        ...
+
+    async def ainvoke(self, input, config=None) -> output:  # 异步执行
+        ...
+```
+
+- Document Loader 是 Runnable
+- Text Splitter 不是（但可以被包装成 RunnableLambda）
+- ChatOpenAI 是 Runnable
+- StrOutputParser 是 Runnable
+- 你自己用 `|` 串起来的 Chain 也是 Runnable
+
+### 管道操作符 `|`
+
+这是 LCEL 的灵魂。`A | B` 的意思是：把 A 的输出作为 B 的输入。
+
+```python
+chain = step1 | step2 | step3
+result = chain.invoke(input)
+# 等价于：
+# tmp1 = step1.invoke(input)
+# tmp2 = step2.invoke(tmp1)
+# result = step3.invoke(tmp2)
+```
+
+### 本项目的完整 RAG Chain
+
+```python
+rag_chain = (
+    {                                                       # Step 1: 并行准备变量
+        "context": RunnableLambda(_retrieve_and_format),     #   检索+格式化
+        "question": RunnablePassthrough(),                  #   问题原样传递
+    }
+    | prompt_template                                       # Step 2: 填入 Prompt
+    | llm                                                   # Step 3: LLM 生成
+    | StrOutputParser()                                     # Step 4: 提取纯文本
+)
+```
+
+逐步骤拆解：
+
+```
+输入: "什么是 Transformer？"
+    │
+    ▼ Step 1: 并行字典
+    │ {
+    │   "context": _retrieve_and_format("什么是 Transformer？")
+    │            → "[1] (来源: NLP讲义.pdf) Transformer 是..."
+    │   "question": RunnablePassthrough() → "什么是 Transformer？"
+    │ }
+    │ → {"context": "[1] ...", "question": "什么是 Transformer？"}
+    │
+    ▼ Step 2: PromptTemplate
+    │ System: "你是一个严谨的课程资料问答助手..."
+    │ Human:  "## 参考资料\n[1] ...\n\n## 用户问题\n什么是 Transformer？"
+    │ → ChatPromptValue
+    │
+    ▼ Step 3: ChatOpenAI
+    │ → AIMessage(content="Transformer 是一种基于自注意力机制的...")
+    │
+    ▼ Step 4: StrOutputParser
+    │ → "Transformer 是一种基于自注意力机制的..."
+    │
+    输出: 纯文本字符串
+```
+
+### 关键 Runnable 组件详解
+
+| 组件 | 作用 | 输入 → 输出 |
+|------|------|------------|
+| `RunnablePassthrough()` | 原样传递数据 | `x` → `x` |
+| `RunnableLambda(fn)` | 包装普通函数为 Runnable | 函数入参 → 函数返回值 |
+| `StrOutputParser()` | 从 AIMessage 提取纯文本 | `AIMessage` → `str` |
+| `ChatPromptTemplate` | 格式化为 Chat 消息 | `{变量} dict` → `ChatPromptValue` |
+| `ChatOpenAI` | 调用大语言模型 | `ChatPromptValue` → `AIMessage` |
+
+### 为什么本项目的 ask() 不直接用 Chain 传 sources？
+
+面试中你可能会被问到："你的 Chain 返回的是纯文本，那 sources 是怎么拿到前端的？"
+
+设计决策：**检索和生成分两步执行，不在 Chain 内部回传 sources。**
+
+```python
+def ask(question: str) -> dict:
+    # Step 1: 执行检索（拿到带 metadata 的原始结果）
+    retrieved = retrieve(question)
+
+    # Step 2: Chain 只负责生成答案（纯文本）
+    answer = chain.invoke(question)
+
+    # Step 3: 在函数层面组合两者
+    return {"answer": answer, "sources": retrieved}
+```
+
+**为什么不把 sources 嵌入 Chain 内部？**
+- Chain 的内部数据流是单向的：输入 → 步骤1 → 步骤2 → ... → 输出
+- 中间步骤的检索结果在 Chain 结束时已经"丢失"（被 PromptTemplate 转换成了字符串）
+- 要让 sources 从 Chain 中透传出来，需要写复杂的自定义 Runnable
+- 在函数层面分开调用，逻辑更清晰，面试时更容易解释
+
+### 不用 LangChain 需要手写什么？
+
+```python
+def manual_rag(question: str) -> dict:
+    """手写 RAG = 手动编排检索 → Prompt → LLM → 解析"""
+    # 1. 检索
+    retrieved = my_retrieve(question)
+    context = format_context(retrieved)
+
+    # 2. 构建 Prompt
+    system = "你是助手，只基于资料回答。"
+    human = f"资料：{context}\n\n问题：{question}"
+
+    # 3. 调用 LLM
+    import openai
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": human},
+        ],
+    )
+    answer = response.choices[0].message.content
+
+    # 4. 返回
+    return {"answer": answer, "sources": retrieved}
+# ← LCEL Chain 替我们做的：
+#   - 统一的 invoke/ainvoke 接口
+#   - 每个步骤可独立测试和替换
+#   - 自动处理异步、流式、回调
+#   - 可视化链路追踪（LangSmith 集成）
+```
+
+### 最小示例
+
+```python
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+
+# 自定义检索+格式化函数
+def get_context(query: str) -> str:
+    return "[1] Transformer 使用自注意力机制..."
+
+# 构建 Chain
+chain = (
+    {
+        "context": RunnableLambda(get_context),
+        "question": RunnablePassthrough(),
+    }
+    | ChatPromptTemplate.from_messages([
+        ("system", "你是一个助手。参考资料：{context}"),
+        ("human", "{question}"),
+    ])
+    | ChatOpenAI(model="gpt-4o")
+    | StrOutputParser()
+)
+
+# 执行
+answer = chain.invoke("什么是 Transformer？")
+print(answer)
+```
+
+### 七个组件总结
+
+至此，我们学完了 StudyRAG 用到的全部 7 个 LangChain 核心组件：
+
+```
+Document Loader  →  Text Splitter  →  Embeddings  →  VectorStore
+      ↓                                              ↓
+  原始文件 → Document → chunks → 向量 → Chroma 存储 → 检索
+                                                         ↓
+                                          Retriever ←───┘
+                                              ↓
+                                        检索结果 (List[dict])
+                                              ↓
+                                       PromptTemplate
+                                              ↓
+                                         Prompt (含来源)
+                                              ↓
+                                          ChatOpenAI
+                                              ↓
+                                        AIMessage
+                                              ↓
+                                      StrOutputParser
+                                              ↓
+                                          纯文本回答
+```
+
+**数据流一句话总结**：文件加载 → 切分 → 向量化 → 存储 → 检索 → Prompt → LLM → 解析 → 回答+来源。
