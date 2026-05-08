@@ -54,4 +54,6 @@ export interface HealthStatus {
   status: string;
   service: string;
   version: string;
+  chroma?: string;
+  document_count?: number;
 }

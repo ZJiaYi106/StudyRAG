@@ -91,7 +91,7 @@ docker compose up -d
 | 5 | 文档上传 API（Loader → Splitter → Embeddings → Store 管道） | ✅ 已完成 |
 | 6 | Retriever + PromptTemplate（检索与 Prompt 构建） | ✅ 已完成 |
 | 7 | LCEL Chain + 问答 API | ✅ 已完成 |
-| 8 | 前端基础（上传、列表、问答 UI） | 🔲 待开始 |
+| 8 | 前端基础（上传、列表、问答 UI） | ✅ 已完成 |
 | 9 | 前后端联调 | 🔲 待开始 |
 | 10 | 测试完善 + README 定稿 | 🔲 待开始 |
 
