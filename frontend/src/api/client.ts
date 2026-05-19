@@ -1,6 +1,6 @@
 /**
  * StudyRAG API 客户端
- * 封装所有后端 API 调用
+ * 封装所有后端 API 调用，统一错误处理
  */
 
 import type {
@@ -12,9 +12,34 @@ import type {
   HealthStatus,
 } from "../types";
 
-// 后端 API 地址（开发时指向本地 8000 端口）
-const API_BASE = "http://localhost:8000";
+// 后端 API 地址
+// 开发时 Vite 代理将 /api 转发到后端，生产时通过 nginx 或直接部署
+const API_BASE = "";
 
+/**
+ * 从 Response 中提取错误信息。
+ * FastAPI 返回 JSON: {"detail": "错误描述"}
+ * 其他情况：返回 HTTP 状态文本
+ */
+async function extractError(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    // FastAPI 的 HTTPException 错误格式
+    if (body.detail) {
+      return typeof body.detail === "string"
+        ? body.detail
+        : JSON.stringify(body.detail);
+    }
+    return JSON.stringify(body);
+  } catch {
+    // 响应不是 JSON（如 502 网关错误），使用状态文本
+    return `${response.statusText} (HTTP ${response.status})`;
+  }
+}
+
+/**
+ * 通用 JSON 请求
+ */
 async function request<T>(
   url: string,
   options?: RequestInit
@@ -27,8 +52,8 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(errorBody || `HTTP ${response.status}`);
+    const msg = await extractError(response);
+    throw new Error(msg);
   }
 
   return response.json();
@@ -44,15 +69,15 @@ export async function uploadDocument(file: File): Promise<DocumentUploadResponse
   const formData = new FormData();
   formData.append("file", file);
 
+  // 不设置 Content-Type，让浏览器自动处理 multipart/form-data boundary
   const response = await fetch(`${API_BASE}/api/documents`, {
     method: "POST",
     body: formData,
-    // 不设置 Content-Type，让浏览器自动处理 multipart/form-data
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(errorBody || `上传失败 (HTTP ${response.status})`);
+    const msg = await extractError(response);
+    throw new Error(msg);
   }
 
   return response.json();

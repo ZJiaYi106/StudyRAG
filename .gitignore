@@ -14,8 +14,7 @@ dist/
 venv/
 
 # --- 数据（本地持久化） ---
-backend/data/uploads/
-backend/data/chroma/
+backend/data/
 
 # --- Node / 前端 ---
 node_modules/

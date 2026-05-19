@@ -18,7 +18,19 @@
       "Bash(npm run *)",
       "Bash(python -c ' *)",
       "Bash(python -m pytest tests/test_loader.py -v)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(mkdir -p data/uploads)",
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(curl -s http://localhost:8000/api/documents)",
+      "Bash(curl -s -X POST http://localhost:8000/api/chat -H \"Content-Type: application/json\" -d '{\"question\":\"测试\"}')",
+      "Bash(kill %1)",
+      "Bash(curl -s -X POST http://localhost:8000/api/chat -H \"Content-Type: application/json\" -d \"{\\\\\"question\\\\\":\\\\\"测试\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/documents -F \"file=@tests/fixtures/sample.pdf\")",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(rm -f data/documents.json)",
+      "Bash(rm -rf data/chroma)",
+      "Bash(curl -s http://127.0.0.1:8000/api/health)",
+      "Bash(curl -s http://127.0.0.1:8000/api/documents)"
     ]
   }
 }

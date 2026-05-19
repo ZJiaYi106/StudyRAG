@@ -92,7 +92,7 @@ docker compose up -d
 | 6 | Retriever + PromptTemplate（检索与 Prompt 构建） | ✅ 已完成 |
 | 7 | LCEL Chain + 问答 API | ✅ 已完成 |
 | 8 | 前端基础（上传、列表、问答 UI） | ✅ 已完成 |
-| 9 | 前后端联调 | 🔲 待开始 |
+| 9 | 前后端联调 | ✅ 已完成 |
 | 10 | 测试完善 + README 定稿 | 🔲 待开始 |
 
 ## 项目结构
