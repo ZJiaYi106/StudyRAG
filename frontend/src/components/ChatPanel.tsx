@@ -47,6 +47,22 @@ export default function ChatPanel({ hasDocuments }: Props) {
     <div className="chat-panel-inner">
       {/* 消息列表 */}
       <div className="messages-container">
+        {messages.length > 0 && (
+          <div className="chat-toolbar">
+            <span>共 {messages.length} 轮对话</span>
+            <button
+              className="btn-clear"
+              onClick={() => {
+                if (confirm("确定要清空所有对话记录吗？")) {
+                  setMessages([]);
+                }
+              }}
+            >
+              🗑️ 清空对话
+            </button>
+          </div>
+        )}
+
         {messages.length === 0 && (
           <div className="chat-empty">
             <p className="chat-empty-icon">💬</p>

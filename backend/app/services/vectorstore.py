@@ -109,15 +109,23 @@ def add_documents(docs: List[Document]) -> List[str]:
         return []
 
     store = get_vectorstore()
-    logger.info(f"[VectorStore] 存入 {len(docs)} 个 chunk")
 
-    # LangChain: add_documents() 内部自动调用 embedding_function 向量化
-    # 我们不需要手动调用 embed_documents() — LangChain 帮我们做了
-    ids = store.add_documents(docs)
+    # 分批入库，避免单次请求超过智谱等服务的 Token 限制
+    BATCH_SIZE = 10
+    all_ids = []
 
-    logger.info(f"[VectorStore] 入库完成: {len(ids)} 个 ID")
+    for i in range(0, len(docs), BATCH_SIZE):
+        batch = docs[i:i + BATCH_SIZE]
+        logger.info(
+            f"[VectorStore] 入库批次 {i // BATCH_SIZE + 1}: "
+            f"{len(batch)} 个 chunk (第 {i + 1}-{min(i + BATCH_SIZE, len(docs))}/{len(docs)})"
+        )
+        batch_ids = store.add_documents(batch)
+        all_ids.extend(batch_ids)
 
-    return ids
+    logger.info(f"[VectorStore] 入库完成: 共 {len(all_ids)} 个 ID（{len(docs)} 个 chunk）")
+
+    return all_ids
 
 
 # ================================================================

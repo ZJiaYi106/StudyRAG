@@ -51,6 +51,8 @@ def get_embeddings() -> OpenAIEmbeddings:
             model=settings.embedding_model,
             openai_api_key=settings.embedding_api_key,
             openai_api_base=settings.embedding_api_base,
+            # 智谱不支持 base64 编码，强制使用 float
+            model_kwargs={"encoding_format": "float"},
         )
 
     return _embeddings

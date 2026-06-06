@@ -9,7 +9,7 @@ export default defineConfig({
     // 开发代理：前端 /api/* 请求转发到后端 8000 端口，避免 CORS 问题
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8008",
         changeOrigin: true,
       },
     },
