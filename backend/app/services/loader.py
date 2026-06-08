@@ -1,11 +1,19 @@
 """
 文档加载器服务
-使用 LangChain Document Loader 加载 PDF 和 Markdown 文件，提取元数据
+使用 LangChain Document Loader 加载多种格式文件，提取元数据
 
 LangChain 组件 #1：Document Loader（文档加载器）
 - 作用：将各种格式的原始文件转换为 LangChain 统一的 Document 对象
 - Document 对象 = page_content（文本内容）+ metadata（元数据字典）
 - 统一接口让下游的 Splitter、VectorStore 等组件无需关心原始文件格式
+
+支持格式：
+- PDF (.pdf)       → PyMuPDFLoader（逐页提取）
+- Markdown (.md)   → 自定义标题分节
+- TXT (.txt)       → 原生读取
+- DOCX (.docx)     → python-docx（按标题样式分节）
+- PPTX (.pptx)     → python-pptx（逐幻灯片提取）
+- Excel (.xlsx)    → openpyxl / xlrd（逐工作表提取，渲染为 Markdown 表格）
 """
 
 import re
@@ -174,6 +182,316 @@ def split_by_headers(content: str) -> List[tuple]:
     return sections
 
 
+def load_txt(file_path: str, document_id: str) -> List[Document]:
+    """
+    加载纯文本文件。
+    整个文件内容作为一个 Document，适合短文本（如笔记、日志、代码片段）。
+
+    Args:
+        file_path: TXT 文件的绝对路径
+        document_id: 关联的文档唯一 ID
+
+    Returns:
+        List[Document]: 包含整个文件内容的单元素列表
+    """
+    filename = Path(file_path).name
+
+    logger.info(f"[Document Loader] 开始加载 TXT: {filename}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if not content.strip():
+        logger.warning(f"[Document Loader] TXT 文件为空: {filename}")
+        return []
+
+    doc = Document(
+        page_content=content.strip(),
+        metadata={
+            "document_id": document_id,
+            "filename": filename,
+            "file_type": "txt",
+            "page": None,
+            "chapter": None,
+        }
+    )
+
+    logger.info(f"[Document Loader] TXT 加载完成: {filename}, {len(content)} 字符")
+    return [doc]
+
+
+def load_docx(file_path: str, document_id: str) -> List[Document]:
+    """
+    加载 Word (.docx) 文档，按标题样式分节。
+
+    解析逻辑：
+    - 遍历所有段落，遇到 Word 内置标题样式（Heading 1-6）时作为章节边界
+    - 标题之前的正文段落归入上一个章节（或"前言"）
+    - 没有标题时整个文档作为一个 Document
+
+    Args:
+        file_path: DOCX 文件的绝对路径
+        document_id: 关联的文档唯一 ID
+
+    Returns:
+        List[Document]: 每个元素代表文档的一个章节
+    """
+    try:
+        from docx import Document as DocxDocument
+    except ImportError:
+        raise ImportError("需要安装 python-docx 库: pip install python-docx")
+
+    filename = Path(file_path).name
+
+    logger.info(f"[Document Loader] 开始加载 DOCX: {filename}")
+
+    docx = DocxDocument(file_path)
+
+    # 收集所有段落及其样式信息
+    sections: List[tuple] = []  # [(title, body_lines), ...]
+    current_title = ""
+    current_lines: List[str] = []
+
+    # Word 内置标题样式名称（中英文兼容）
+    HEADING_STYLES = {
+        "Heading 1", "Heading 2", "Heading 3",
+        "Heading 4", "Heading 5", "Heading 6",
+        "标题 1", "标题 2", "标题 3",
+        "标题 4", "标题 5", "标题 6",
+        "heading 1", "heading 2", "heading 3",
+    }
+
+    for para in docx.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        style_name = para.style.name if para.style else ""
+
+        # 检查是否为标题样式
+        is_heading = style_name in HEADING_STYLES or style_name.startswith("Heading") or style_name.startswith("标题")
+
+        if is_heading:
+            # 保存上一个章节
+            if current_lines:
+                sections.append((current_title, "\n".join(current_lines)))
+            # 开始新章节
+            current_title = text
+            current_lines = []
+        else:
+            current_lines.append(text)
+
+    # 保存最后一个章节
+    if current_lines:
+        sections.append((current_title, "\n".join(current_lines)))
+    elif current_title and not current_lines:
+        # 只有标题没有正文的情况
+        sections.append((current_title, ""))
+
+    # 如果没有识别到标题，整个文档作为一个段落组
+    if not sections:
+        all_text = "\n".join(p.text for p in docx.paragraphs if p.text.strip())
+        if all_text:
+            sections.append(("", all_text))
+
+    docs = []
+    for i, (title, body) in enumerate(sections):
+        full_text = f"{title}\n{body}" if title else body
+        chapter = title if title else ("前言" if i == 0 else f"第{i+1}节")
+
+        doc = Document(
+            page_content=full_text.strip(),
+            metadata={
+                "document_id": document_id,
+                "filename": filename,
+                "file_type": "docx",
+                "page": None,
+                "chapter": chapter,
+                "section_index": i,
+            }
+        )
+        docs.append(doc)
+
+    if not docs:
+        logger.warning(f"[Document Loader] DOCX 解析结果为空: {filename}")
+
+    logger.info(f"[Document Loader] DOCX 加载完成: {filename}, 共 {len(docs)} 节")
+    return docs
+
+
+def load_pptx(file_path: str, document_id: str) -> List[Document]:
+    """
+    加载 PowerPoint (.pptx) 演示文稿，逐幻灯片提取文本。
+
+    提取内容包括：
+    - 幻灯片标题和副标题
+    - 所有形状内的文本（文本框、占位符、表格等）
+    - 备注页文本（如果有）
+
+    Args:
+        file_path: PPTX 文件的绝对路径
+        document_id: 关联的文档唯一 ID
+
+    Returns:
+        List[Document]: 每个元素代表一张幻灯片
+    """
+    try:
+        from pptx import Presentation
+    except ImportError:
+        raise ImportError("需要安装 python-pptx 库: pip install python-pptx")
+
+    filename = Path(file_path).name
+
+    logger.info(f"[Document Loader] 开始加载 PPTX: {filename}")
+
+    prs = Presentation(file_path)
+    docs = []
+
+    for slide_num, slide in enumerate(prs.slides, start=1):
+        texts: List[str] = []
+
+        # 提取幻灯片中所有形状的文本
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    line = para.text.strip()
+                    if line:
+                        texts.append(line)
+
+            # 提取表格内的文本
+            if shape.has_table:
+                table = shape.table
+                for row in table.rows:
+                    row_texts = [cell.text.strip() for cell in row.cells]
+                    texts.append(" | ".join(row_texts))
+
+        # 提取备注
+        if slide.has_notes_slide:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+            if notes:
+                texts.append(f"\n[备注] {notes}")
+
+        content = "\n".join(texts)
+
+        if not content.strip():
+            continue  # 跳过空白幻灯片
+
+        doc = Document(
+            page_content=content,
+            metadata={
+                "document_id": document_id,
+                "filename": filename,
+                "file_type": "pptx",
+                "page": slide_num,
+                "chapter": None,
+            }
+        )
+        docs.append(doc)
+
+    if not docs:
+        logger.warning(f"[Document Loader] PPTX 解析结果为空: {filename}")
+
+    logger.info(f"[Document Loader] PPTX 加载完成: {filename}, 共 {len(docs)} 张幻灯片")
+    return docs
+
+
+def load_excel(file_path: str, document_id: str) -> List[Document]:
+    """
+    加载 Excel 表格文件（.xlsx / .xls），逐工作表提取。
+    每个工作表渲染为可读的文本格式（包含列名和数据类型信息）。
+
+    Args:
+        file_path: Excel 文件的绝对路径
+        document_id: 关联的文档唯一 ID
+
+    Returns:
+        List[Document]: 每个元素代表一个工作表
+    """
+    filename = Path(file_path).name
+    ext = Path(file_path).suffix.lower()
+
+    logger.info(f"[Document Loader] 开始加载 Excel: {filename}")
+
+    # 根据扩展名选择读取引擎
+    if ext == ".xls":
+        try:
+            import xlrd
+            workbook = xlrd.open_workbook(file_path)
+            sheet_names = workbook.sheet_names()
+
+            docs = []
+            for sheet_name in sheet_names:
+                sheet = workbook.sheet_by_name(sheet_name)
+                rows = []
+                for row_idx in range(sheet.nrows):
+                    row_values = [str(sheet.cell_value(row_idx, col_idx)) for col_idx in range(sheet.ncols)]
+                    rows.append(" | ".join(row_values))
+
+                if not rows:
+                    continue
+
+                content = f"[工作表: {sheet_name}]\n" + "\n".join(rows)
+
+                doc = Document(
+                    page_content=content,
+                    metadata={
+                        "document_id": document_id,
+                        "filename": filename,
+                        "file_type": "excel",
+                        "page": None,
+                        "chapter": sheet_name,
+                    }
+                )
+                docs.append(doc)
+        except ImportError:
+            raise ImportError("需要安装 xlrd 库: pip install xlrd")
+    else:
+        # .xlsx 使用 openpyxl
+        try:
+            import openpyxl
+        except ImportError:
+            raise ImportError("需要安装 openpyxl 库: pip install openpyxl")
+
+        workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        docs = []
+
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            rows = []
+            max_col = sheet.max_column or 1
+
+            for row in sheet.iter_rows(values_only=True):
+                row_values = [str(cell) if cell is not None else "" for cell in row]
+                # 补齐到最大列数
+                row_values += [""] * (max_col - len(row_values))
+                rows.append(" | ".join(row_values))
+
+            if not rows:
+                continue
+
+            content = f"[工作表: {sheet_name}]\n" + "\n".join(rows)
+
+            doc = Document(
+                page_content=content,
+                metadata={
+                    "document_id": document_id,
+                    "filename": filename,
+                    "file_type": "excel",
+                    "page": None,
+                    "chapter": sheet_name,
+                }
+            )
+            docs.append(doc)
+
+        workbook.close()
+
+    if not docs:
+        logger.warning(f"[Document Loader] Excel 解析结果为空: {filename}")
+
+    logger.info(f"[Document Loader] Excel 加载完成: {filename}, 共 {len(docs)} 个工作表")
+    return docs
+
+
 # ================================================================
 # 统一入口：根据文件类型自动选择加载器
 # ================================================================
@@ -195,5 +513,13 @@ def load_document(file_path: str, document_id: str) -> List[Document]:
         return load_pdf(file_path, document_id)
     elif ext in (".md", ".markdown"):
         return load_markdown(file_path, document_id)
+    elif ext == ".txt":
+        return load_txt(file_path, document_id)
+    elif ext == ".docx":
+        return load_docx(file_path, document_id)
+    elif ext == ".pptx":
+        return load_pptx(file_path, document_id)
+    elif ext in (".xlsx", ".xls"):
+        return load_excel(file_path, document_id)
     else:
         raise ValueError(f"不支持的文件类型: {ext}")

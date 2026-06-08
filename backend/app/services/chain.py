@@ -113,7 +113,7 @@ def build_rag_chain():
     # 初始化 LLM
     llm = ChatOpenAI(
         model=settings.llm_model,
-        openai_api_key=settings.llm_api_key,
+        openai_api_key=settings.llm_api_key.get_secret_value(),
         openai_api_base=settings.llm_api_base,
         temperature=0.1,  # 低温度减少幻觉，让回答更忠实于参考资料
     )

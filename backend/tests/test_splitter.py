@@ -1,16 +1,25 @@
 """
 Text Splitter 单元测试
-测试 RecursiveCharacterTextSplitter 的切分行为、metadata 继承、边界情况
+测试多种分块策略（recursive、token、character）和文件类型分隔符
 """
 
 import pytest
 from langchain_core.documents import Document
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    TokenTextSplitter,
+    CharacterTextSplitter,
+)
 
 from app.services.splitter import (
     split_documents,
     get_splitter,
+    get_separators,
     PDF_SEPARATORS,
     MARKDOWN_SEPARATORS,
+    GENERAL_SEPARATORS,
+    EXCEL_SEPARATORS,
+    VALID_STRATEGIES,
 )
 
 
@@ -32,23 +41,123 @@ class TestGetSplitter:
 
     def test_pdf_splitter_uses_pdf_separators(self):
         """PDF splitter 应使用 PDF 分隔符"""
-        splitter = get_splitter("pdf")
-        # RecursiveCharacterTextSplitter 内部存储了 separators
+        splitter = get_splitter("pdf", "recursive")
         assert splitter._separators == PDF_SEPARATORS
 
     def test_markdown_splitter_uses_md_separators(self):
         """Markdown splitter 应使用 Markdown 分隔符"""
-        splitter = get_splitter("markdown")
+        splitter = get_splitter("markdown", "recursive")
         assert splitter._separators == MARKDOWN_SEPARATORS
+
+    def test_txt_splitter_uses_general_separators(self):
+        """TXT splitter 应使用通用分隔符"""
+        splitter = get_splitter("txt", "recursive")
+        assert splitter._separators == GENERAL_SEPARATORS
+
+    def test_excel_splitter_uses_excel_separators(self):
+        """Excel splitter 应使用表格分隔符"""
+        splitter = get_splitter("excel", "recursive")
+        assert splitter._separators == EXCEL_SEPARATORS
+
+    def test_token_strategy_returns_token_splitter(self):
+        """token 策略应返回 TokenTextSplitter"""
+        splitter = get_splitter("pdf", "token", chunk_size=256, chunk_overlap=20)
+        assert isinstance(splitter, TokenTextSplitter)
+
+    def test_character_strategy_returns_character_splitter(self):
+        """character 策略应返回 CharacterTextSplitter"""
+        splitter = get_splitter("pdf", "character")
+        assert isinstance(splitter, CharacterTextSplitter)
+
+    def test_recursive_strategy_returns_recursive_splitter(self):
+        """recursive 策略应返回 RecursiveCharacterTextSplitter"""
+        splitter = get_splitter("pdf", "recursive")
+        assert isinstance(splitter, RecursiveCharacterTextSplitter)
+
+    def test_invalid_strategy_raises(self):
+        """无效策略应抛出 ValueError"""
+        with pytest.raises(ValueError, match="无效的分块策略"):
+            get_splitter("pdf", "invalid_strategy")
+
+    def test_custom_chunk_size(self):
+        """自定义 chunk_size 应生效"""
+        splitter = get_splitter("pdf", "recursive", chunk_size=500)
+        assert splitter._chunk_size == 500
+
+    def test_default_is_recursive_pdf(self):
+        """默认策略和文件类型"""
+        splitter = get_splitter()
+        assert isinstance(splitter, RecursiveCharacterTextSplitter)
+        assert splitter._separators == PDF_SEPARATORS
 
     def test_markdown_separators_include_code_block(self):
         """Markdown 分隔符应包含代码块边界标记"""
         assert "\n```\n" in MARKDOWN_SEPARATORS
 
-    def test_default_is_pdf(self):
-        """默认文件类型应为 pdf"""
-        splitter = get_splitter()
-        assert splitter._separators == PDF_SEPARATORS
+
+class TestGetSeparators:
+    """测试分隔符映射"""
+
+    def test_known_types(self):
+        """已知类型应返回对应分隔符"""
+        assert get_separators("pdf") == PDF_SEPARATORS
+        assert get_separators("markdown") == MARKDOWN_SEPARATORS
+        assert get_separators("txt") == GENERAL_SEPARATORS
+        assert get_separators("docx") == GENERAL_SEPARATORS
+        assert get_separators("pptx") == GENERAL_SEPARATORS
+        assert get_separators("excel") == EXCEL_SEPARATORS
+
+    def test_unknown_type_defaults_to_pdf(self):
+        """未知类型应回退到 PDF 分隔符"""
+        assert get_separators("unknown_type") == PDF_SEPARATORS
+
+
+# ================================================================
+# 分块策略对比测试
+# ================================================================
+
+class TestChunkStrategies:
+    """测试三种分块策略的行为差异"""
+
+    def test_recursive_produces_chunks(self):
+        """recursive 策略应正常产出 chunk"""
+        text = "段落一。段落二。段落三。" * 50
+        docs = [make_doc(text)]
+        chunks = split_documents(docs, "txt", "recursive", chunk_size=200)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.metadata["chunk_strategy"] == "recursive"
+
+    def test_token_produces_chunks(self):
+        """token 策略应正常产出 chunk"""
+        text = "段落一。段落二。段落三。" * 50
+        docs = [make_doc(text)]
+        chunks = split_documents(docs, "txt", "token", chunk_size=100)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.metadata["chunk_strategy"] == "token"
+
+    def test_character_produces_chunks(self):
+        """character 策略应正常产出 chunk"""
+        text = "段落一。段落二。段落三。" * 50
+        docs = [make_doc(text)]
+        chunks = split_documents(docs, "txt", "character", chunk_size=200)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.metadata["chunk_strategy"] == "character"
+
+    def test_strategies_produce_different_counts(self):
+        """不同策略对同一文本可能产生不同数量的 chunk"""
+        text = "这是一段测试内容。包含多个句子。用来验证不同策略的差异。" * 30
+        docs = [make_doc(text)]
+        # 使用相同 chunk_size，不同策略（chunk_overlap 必须小于 chunk_size）
+        recursive_chunks = split_documents(docs, "txt", "recursive", chunk_size=150, chunk_overlap=20)
+        token_chunks = split_documents(docs, "txt", "token", chunk_size=150, chunk_overlap=10)
+        character_chunks = split_documents(docs, "txt", "character", chunk_size=150, chunk_overlap=20)
+        # 三种策略产生的数量——至少都能正常工作
+        assert len(recursive_chunks) >= 1
+        assert len(token_chunks) >= 1
+        assert len(character_chunks) >= 1
 
 
 # ================================================================

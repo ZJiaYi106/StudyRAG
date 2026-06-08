@@ -1,6 +1,7 @@
 """
 Document Loader 单元测试
-测试 PDF 和 Markdown 加载、元数据提取、边界情况
+测试所有支持的文件格式（PDF、Markdown、TXT、DOCX、PPTX、Excel）加载、
+元数据提取、边界情况
 """
 
 import os
@@ -10,6 +11,10 @@ from pathlib import Path
 from app.services.loader import (
     load_pdf,
     load_markdown,
+    load_txt,
+    load_docx,
+    load_pptx,
+    load_excel,
     load_document,
     split_by_headers,
 )
@@ -18,6 +23,10 @@ from app.services.loader import (
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_PDF = str(FIXTURES_DIR / "sample.pdf")
 SAMPLE_MD = str(FIXTURES_DIR / "sample.md")
+SAMPLE_TXT = str(FIXTURES_DIR / "sample.txt")
+SAMPLE_DOCX = str(FIXTURES_DIR / "sample.docx")
+SAMPLE_PPTX = str(FIXTURES_DIR / "sample.pptx")
+SAMPLE_XLSX = str(FIXTURES_DIR / "sample.xlsx")
 TEST_DOC_ID = "test-doc-001"
 
 
@@ -175,6 +184,141 @@ class TestSplitByHeaders:
 
 
 # ================================================================
+# TXT 加载测试
+# ================================================================
+
+class TestTXTLoader:
+    """测试纯文本文件加载器"""
+
+    def test_load_txt_returns_documents(self):
+        """TXT 加载应返回 1 个 Document"""
+        docs = load_txt(SAMPLE_TXT, TEST_DOC_ID)
+        assert len(docs) == 1
+
+    def test_txt_content_not_empty(self):
+        """Document 的 page_content 不应为空"""
+        docs = load_txt(SAMPLE_TXT, TEST_DOC_ID)
+        assert len(docs[0].page_content.strip()) > 0
+        assert "RAG" in docs[0].page_content
+
+    def test_txt_metadata_values(self):
+        """TXT metadata 应正确"""
+        docs = load_txt(SAMPLE_TXT, TEST_DOC_ID)
+        meta = docs[0].metadata
+        assert meta["file_type"] == "txt"
+        assert meta["document_id"] == TEST_DOC_ID
+        assert meta["page"] is None
+        assert "sample.txt" in meta["filename"]
+
+
+# ================================================================
+# DOCX 加载测试
+# ================================================================
+
+class TestDOCXLoader:
+    """测试 Word 文档加载器（按标题样式分节）"""
+
+    def test_load_docx_returns_documents(self):
+        """DOCX 加载应返回多个章节"""
+        docs = load_docx(SAMPLE_DOCX, TEST_DOC_ID)
+        assert len(docs) >= 1
+
+    def test_docx_content_not_empty(self):
+        """每个章节的 page_content 不应为空"""
+        docs = load_docx(SAMPLE_DOCX, TEST_DOC_ID)
+        for doc in docs:
+            assert len(doc.page_content.strip()) > 0
+
+    def test_docx_metadata_values(self):
+        """DOCX metadata 应正确"""
+        docs = load_docx(SAMPLE_DOCX, TEST_DOC_ID)
+        meta = docs[0].metadata
+        assert meta["file_type"] == "docx"
+        assert meta["document_id"] == TEST_DOC_ID
+        assert meta["page"] is None
+        assert meta["chapter"] is not None  # 应从标题样式提取
+
+    def test_docx_chapters_extracted(self):
+        """标题样式应被正确识别为 chapter"""
+        docs = load_docx(SAMPLE_DOCX, TEST_DOC_ID)
+        chapters = [doc.metadata["chapter"] for doc in docs]
+        # sample.docx 包含 "RAG 技术概述" 等标题
+        assert any("RAG" in ch for ch in chapters if ch), \
+            f"应包含 RAG 相关章节，实际: {chapters}"
+
+
+# ================================================================
+# PPTX 加载测试
+# ================================================================
+
+class TestPPTXLoader:
+    """测试 PowerPoint 加载器（逐幻灯片提取）"""
+
+    def test_load_pptx_returns_documents(self):
+        """PPTX 加载应返回多个幻灯片 Document"""
+        docs = load_pptx(SAMPLE_PPTX, TEST_DOC_ID)
+        assert len(docs) >= 1
+
+    def test_pptx_content_not_empty(self):
+        """每个幻灯片的 page_content 不应为空"""
+        docs = load_pptx(SAMPLE_PPTX, TEST_DOC_ID)
+        for doc in docs:
+            assert len(doc.page_content.strip()) > 0
+
+    def test_pptx_metadata_values(self):
+        """PPTX metadata 应正确"""
+        docs = load_pptx(SAMPLE_PPTX, TEST_DOC_ID)
+        meta = docs[0].metadata
+        assert meta["file_type"] == "pptx"
+        assert meta["document_id"] == TEST_DOC_ID
+        assert meta["page"] is not None  # 幻灯片有页码
+
+    def test_pptx_page_numbers_sequential(self):
+        """幻灯片页码应从 1 开始递增"""
+        docs = load_pptx(SAMPLE_PPTX, TEST_DOC_ID)
+        pages = [doc.metadata["page"] for doc in docs]
+        assert pages == sorted(pages), f"页码应递增，实际: {pages}"
+
+
+# ================================================================
+# Excel 加载测试
+# ================================================================
+
+class TestExcelLoader:
+    """测试 Excel 加载器（逐工作表提取，渲染为表格文本）"""
+
+    def test_load_excel_returns_documents(self):
+        """Excel 加载应返回多个工作表 Document"""
+        docs = load_excel(SAMPLE_XLSX, TEST_DOC_ID)
+        assert len(docs) >= 1
+
+    def test_excel_content_not_empty(self):
+        """每个工作表的 page_content 不应为空"""
+        docs = load_excel(SAMPLE_XLSX, TEST_DOC_ID)
+        for doc in docs:
+            assert len(doc.page_content.strip()) > 0
+
+    def test_excel_metadata_values(self):
+        """Excel metadata 应正确"""
+        docs = load_excel(SAMPLE_XLSX, TEST_DOC_ID)
+        meta = docs[0].metadata
+        assert meta["file_type"] == "excel"
+        assert meta["document_id"] == TEST_DOC_ID
+        assert meta["chapter"] is not None  # chapter = 工作表名称
+        assert meta["page"] is None
+
+    def test_excel_sheet_names_as_chapter(self):
+        """工作表名称应被记录为 chapter"""
+        docs = load_excel(SAMPLE_XLSX, TEST_DOC_ID)
+        chapters = [doc.metadata["chapter"] for doc in docs]
+        # sample.xlsx 包含 "技术对比" 和 "性能指标" 工作表
+        assert any("技术对比" in ch for ch in chapters if ch), \
+            f"应包含'技术对比'工作表，实际: {chapters}"
+        assert any("性能" in ch for ch in chapters if ch), \
+            f"应包含'性能'相关工作表，实际: {chapters}"
+
+
+# ================================================================
 # 统一入口测试
 # ================================================================
 
@@ -191,10 +335,34 @@ class TestLoadDocument:
         docs = load_document(SAMPLE_MD, TEST_DOC_ID)
         assert len(docs) >= 2
 
+    def test_load_txt_via_unified(self):
+        """通过统一入口加载 TXT"""
+        docs = load_document(SAMPLE_TXT, TEST_DOC_ID)
+        assert len(docs) == 1
+        assert docs[0].metadata["file_type"] == "txt"
+
+    def test_load_docx_via_unified(self):
+        """通过统一入口加载 DOCX"""
+        docs = load_document(SAMPLE_DOCX, TEST_DOC_ID)
+        assert len(docs) >= 1
+        assert docs[0].metadata["file_type"] == "docx"
+
+    def test_load_pptx_via_unified(self):
+        """通过统一入口加载 PPTX"""
+        docs = load_document(SAMPLE_PPTX, TEST_DOC_ID)
+        assert len(docs) >= 1
+        assert docs[0].metadata["file_type"] == "pptx"
+
+    def test_load_xlsx_via_unified(self):
+        """通过统一入口加载 Excel"""
+        docs = load_document(SAMPLE_XLSX, TEST_DOC_ID)
+        assert len(docs) >= 1
+        assert docs[0].metadata["file_type"] == "excel"
+
     def test_unsupported_extension(self):
         """不支持的文件类型应抛出异常"""
         with pytest.raises(ValueError, match="不支持的文件类型"):
-            load_document("/fake/path.txt", TEST_DOC_ID)
+            load_document("/fake/path.xyz", TEST_DOC_ID)
 
     def test_pdf_with_nonexistent_file(self):
         """不存在的 PDF 文件应抛出异常"""

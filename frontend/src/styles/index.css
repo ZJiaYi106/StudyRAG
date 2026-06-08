@@ -122,6 +122,105 @@ body {
   margin-bottom: 16px;
 }
 
+/* --- 分块策略选择器 --- */
+.chunk-options {
+  background: var(--color-bg);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.chunk-option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chunk-label {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.chunk-select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+}
+
+.chunk-select:focus {
+  border-color: var(--color-primary);
+}
+
+.btn-advanced-toggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-advanced-toggle:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.strategy-desc {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.advanced-options {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.advanced-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.advanced-row label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  min-width: 60px;
+}
+
+.chunk-number {
+  width: 90px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.chunk-number:focus {
+  border-color: var(--color-primary);
+}
+
+.advanced-unit {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* --- 拖拽区域 --- */
 .drop-zone {
   border: 2px dashed var(--color-border);
   border-radius: var(--radius);

@@ -11,9 +11,10 @@ class DocumentUploadResponse(BaseModel):
     """上传文档成功后的响应"""
     id: str = Field(..., description="文档唯一标识（UUID）")
     filename: str = Field(..., description="原始文件名")
-    file_type: str = Field(..., description="文件类型：pdf 或 markdown")
-    page_count: int = Field(..., description="文档总页数（Markdown 为 1）")
+    file_type: str = Field(..., description="文件类型：pdf、markdown、txt、docx、pptx、excel")
+    page_count: int = Field(..., description="文档总页数 / 幻灯片数 / 工作表数 / 章节数")
     chunk_count: int = Field(..., description="切分后的文本片段数")
+    chunk_strategy: str = Field(..., description="使用的分块策略")
     created_at: datetime = Field(..., description="上传时间")
 
 
@@ -23,6 +24,7 @@ class DocumentListItem(BaseModel):
     filename: str
     file_type: str
     chunk_count: int
+    chunk_strategy: str = "recursive"
     created_at: datetime
 
 

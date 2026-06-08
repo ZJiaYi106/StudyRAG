@@ -57,6 +57,7 @@ def add_record(
     file_type: str,
     page_count: int,
     chunk_count: int,
+    chunk_strategy: str = "recursive",
 ) -> dict:
     """添加一条文档记录"""
     record = {
@@ -65,6 +66,7 @@ def add_record(
         "file_type": file_type,
         "page_count": page_count,
         "chunk_count": chunk_count,
+        "chunk_strategy": chunk_strategy,
         "created_at": datetime.now().isoformat(),
     }
 

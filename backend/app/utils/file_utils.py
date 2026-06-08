@@ -10,7 +10,13 @@ from pathlib import Path
 from fastapi import UploadFile
 
 # 允许上传的文件类型
-ALLOWED_EXTENSIONS = {".pdf", ".md", ".markdown"}
+ALLOWED_EXTENSIONS = {
+    ".pdf", ".md", ".markdown",   # 原有格式
+    ".txt",                        # 纯文本
+    ".docx",                       # Word 文档
+    ".pptx",                       # PowerPoint 演示文稿
+    ".xlsx", ".xls",              # Excel 表格（新旧格式）
+}
 
 # 最大文件大小 50MB
 MAX_FILE_SIZE = 50 * 1024 * 1024

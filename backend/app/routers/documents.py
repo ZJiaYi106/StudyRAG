@@ -11,7 +11,7 @@ import uuid
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 
 from app.config import settings
 from app.models.document import DocumentUploadResponse, DocumentListItem, DeleteResponse
@@ -27,15 +27,33 @@ router = APIRouter(prefix="/api/documents", tags=["文档管理"])
 
 
 @router.post("", response_model=DocumentUploadResponse, status_code=201)
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    chunk_strategy: str = Query(
+        default="recursive",
+        description="分块策略：recursive（递归分割）、token（Token 分割）、character（固定字符分割）",
+    ),
+    chunk_size: int = Query(
+        default=None,
+        ge=50,
+        le=8000,
+        description="每个 chunk 的最大字符/Token 数，不传则使用默认值",
+    ),
+    chunk_overlap: int = Query(
+        default=None,
+        ge=0,
+        le=2000,
+        description="相邻 chunk 的重叠字符数，不传则使用默认值",
+    ),
+):
     """
-    上传 PDF 或 Markdown 文档。
+    上传文档（支持 PDF、Markdown、TXT、DOCX、PPTX、Excel）并完成完整的 RAG 入库管道。
 
     完整管道：
     1. 校验文件类型和大小
     2. 保存到本地磁盘
     3. Document Loader 解析文件 → List[Document]
-    4. Text Splitter 切分 → List[Document] (chunks)
+    4. Text Splitter 按指定策略切分 → List[Document] (chunks)
     5. Chroma VectorStore 向量化并持久化
     6. 写入文档注册表
     7. 返回上传统计信息
@@ -46,7 +64,13 @@ async def upload_document(file: UploadFile = File(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    file_type = "markdown" if ext in (".md", ".markdown") else "pdf"
+    # --- 推断文件类型 ---
+    ext_to_type = {
+        ".pdf": "pdf", ".md": "markdown", ".markdown": "markdown",
+        ".txt": "txt", ".docx": "docx", ".pptx": "pptx",
+        ".xlsx": "excel", ".xls": "excel",
+    }
+    file_type = ext_to_type.get(ext, "pdf")
     document_id = uuid.uuid4().hex
     original_filename = file.filename
 
@@ -68,8 +92,8 @@ async def upload_document(file: UploadFile = File(...)):
 
         page_count = len(docs)
 
-        # 4. 切分文档（LangChain Text Splitter）
-        chunks = split_documents(docs, file_type)
+        # 4. 切分文档（LangChain Text Splitter，支持策略选择）
+        chunks = split_documents(docs, file_type, chunk_strategy, chunk_size, chunk_overlap)
         if not chunks:
             raise ValueError("文档切分结果为空")
 
@@ -94,6 +118,7 @@ async def upload_document(file: UploadFile = File(...)):
         file_type=file_type,
         page_count=page_count,
         chunk_count=len(chunks),
+        chunk_strategy=chunk_strategy,
     )
 
     logger.info(
@@ -108,6 +133,7 @@ async def upload_document(file: UploadFile = File(...)):
         file_type=record["file_type"],
         page_count=record["page_count"],
         chunk_count=record["chunk_count"],
+        chunk_strategy=record.get("chunk_strategy", "recursive"),
         created_at=datetime.fromisoformat(record["created_at"]),
     )
 
@@ -123,6 +149,7 @@ async def list_documents():
             filename=r["filename"],
             file_type=r["file_type"],
             chunk_count=r["chunk_count"],
+            chunk_strategy=r.get("chunk_strategy", "recursive"),
             created_at=datetime.fromisoformat(r["created_at"]),
         )
         for r in records

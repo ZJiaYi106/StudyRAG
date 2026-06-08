@@ -3,12 +3,23 @@
  * 与后端 Pydantic 模型一一对应
  */
 
+/** 分块策略 */
+export type ChunkStrategy = "recursive" | "token" | "character";
+
+/** 分块策略选项（用于下拉菜单） */
+export interface ChunkStrategyOption {
+  value: ChunkStrategy;
+  label: string;
+  desc: string;
+}
+
 /** 文档列表项 */
 export interface DocumentListItem {
   id: string;
   filename: string;
   file_type: string;
   chunk_count: number;
+  chunk_strategy: ChunkStrategy;
   created_at: string;
 }
 
@@ -19,7 +30,15 @@ export interface DocumentUploadResponse {
   file_type: string;
   page_count: number;
   chunk_count: number;
+  chunk_strategy: ChunkStrategy;
   created_at: string;
+}
+
+/** 上传选项 */
+export interface UploadOptions {
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }
 
 /** 删除响应 */

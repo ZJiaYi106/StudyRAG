@@ -4,6 +4,7 @@ StudyRAG 配置管理
 所有密钥类配置绝不硬编码，必须从环境变量读取
 """
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -11,12 +12,14 @@ class Settings(BaseSettings):
     """应用配置，自动从 .env 文件和环境变量中加载"""
 
     # --- LLM 配置（OpenAI API 兼容接口） ---
-    llm_api_key: str
+    # SecretStr: 防止密钥在日志或 print(settings) 时泄露
+    # 取值时需要用 .get_secret_value() 方法
+    llm_api_key: SecretStr
     llm_api_base: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o"
 
     # --- Embedding 配置（OpenAI API 兼容接口） ---
-    embedding_api_key: str
+    embedding_api_key: SecretStr
     embedding_api_base: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
 
@@ -30,12 +33,16 @@ class Settings(BaseSettings):
     upload_dir: str = "data/uploads"
 
     # --- 文本切分参数 ---
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
+    chunk_strategy: str = Field(
+        default="recursive",
+        description="默认分块策略：recursive / token / character",
+    )
+    chunk_size: int = Field(default=1000, ge=50, le=8000)
+    chunk_overlap: int = Field(default=200, ge=0, le=2000)
 
     # --- 检索参数 ---
-    top_k: int = 4
-    similarity_threshold: float = 0.5
+    top_k: int = Field(default=4, ge=1, le=20)
+    similarity_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

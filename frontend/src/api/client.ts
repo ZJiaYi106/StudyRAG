@@ -10,6 +10,7 @@ import type {
   ChatRequest,
   ChatResponse,
   HealthStatus,
+  UploadOptions,
 } from "../types";
 
 // 后端 API 地址
@@ -65,12 +66,30 @@ export async function checkHealth(): Promise<HealthStatus> {
 }
 
 /** 上传文档 */
-export async function uploadDocument(file: File): Promise<DocumentUploadResponse> {
+export async function uploadDocument(
+  file: File,
+  options?: UploadOptions
+): Promise<DocumentUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
+  // 构建 query string 传递分块参数
+  const params = new URLSearchParams();
+  if (options?.chunkStrategy) {
+    params.set("chunk_strategy", options.chunkStrategy);
+  }
+  if (options?.chunkSize !== undefined) {
+    params.set("chunk_size", String(options.chunkSize));
+  }
+  if (options?.chunkOverlap !== undefined) {
+    params.set("chunk_overlap", String(options.chunkOverlap));
+  }
+
+  const queryString = params.toString();
+  const url = `${API_BASE}/api/documents${queryString ? "?" + queryString : ""}`;
+
   // 不设置 Content-Type，让浏览器自动处理 multipart/form-data boundary
-  const response = await fetch(`${API_BASE}/api/documents`, {
+  const response = await fetch(url, {
     method: "POST",
     body: formData,
   });
