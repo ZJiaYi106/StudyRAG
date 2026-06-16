@@ -10,8 +10,9 @@
 
 import logging
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from app.models.chat import ChatRequest, ChatResponse, SourceInfo
-from app.services.chain import ask
+from app.services.chain import ask, ask_stream
 from app.utils.registry import list_records
 from app.utils.auth import get_current_user
 
@@ -34,17 +35,17 @@ async def chat(request: ChatRequest, user: str = Depends(get_current_user)):
     """
     logger.info(f"[问答] 收到提问: {request.question[:50]}...")
 
-    # 检查知识库是否为空
-    docs = list_records()
+    # 检查当前用户的知识库是否为空
+    docs = list_records(owner=user)
     if not docs:
         raise HTTPException(
             status_code=400,
             detail="知识库中没有文档。请先上传 PDF 或 Markdown 文件后再提问。"
         )
 
-    # 执行 RAG 问答
+    # 执行 RAG 问答（带 owner 做用户隔离）
     try:
-        result = ask(request.question)
+        result = ask(request.question, owner=user)
     except Exception as e:
         logger.error(f"[问答] RAG Chain 执行失败: {e}")
         raise HTTPException(
@@ -72,4 +73,25 @@ async def chat(request: ChatRequest, user: str = Depends(get_current_user)):
         answer=result["answer"],
         sources=sources,
         question=request.question,
+    )
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest, user: str = Depends(get_current_user)):
+    """
+    流式 RAG 问答——通过 SSE 推送进度事件和最终结果。
+    """
+    docs = list_records(owner=user)
+    if not docs:
+        raise HTTPException(status_code=400, detail="知识库中没有文档。请先上传文件后再提问。")
+
+    logger.info(f"[问答SSE] 收到提问: {request.question[:50]}...")
+
+    return StreamingResponse(
+        ask_stream(request.question, owner=user),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

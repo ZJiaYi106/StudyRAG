@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import documents, chat, auth
+from app.routers import documents, chat, auth, eval as eval_router
 
 # --- 日志配置 ---
 logging.basicConfig(
@@ -34,6 +34,28 @@ async def lifespan(app: FastAPI):
 
     # 确保上传目录存在
     os.makedirs(settings.upload_dir, exist_ok=True)
+
+    # 从 Chroma 重建 BM25 索引（进程重启后内存中的数据丢失）
+    try:
+        from app.services.vectorstore import get_vectorstore
+        from app.services.retrievers.bm25_retriever import get_bm25_retriever
+
+        store = get_vectorstore()
+        collection = store._collection
+        if collection.count() > 0:
+            all_data = collection.get()
+            chunks = []
+            from langchain_core.documents import Document
+            for i in range(len(all_data["ids"])):
+                chunks.append(Document(
+                    page_content=all_data["documents"][i],
+                    metadata=all_data["metadatas"][i] if all_data["metadatas"] else {},
+                ))
+            bm25 = get_bm25_retriever()
+            bm25.add_chunks(chunks)
+            logger.info(f"BM25 索引已重建: {len(chunks)} 个 chunk")
+    except Exception as e:
+        logger.warning(f"BM25 索引重建失败（不影响主流程）: {e}")
 
     logger.info("=" * 50)
     yield
@@ -63,6 +85,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(eval_router.router)
 
 
 # --- 健康检查端点 ---

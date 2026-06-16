@@ -1,111 +1,105 @@
-/**
- * 问答面板组件
- * 输入框 + 发送按钮 + 消息列表 + 空状态提示
- */
-
 import { useState, useRef, useEffect, type FormEvent } from "react";
-import { askQuestion } from "../api/client";
+import { askQuestionStream, type ProgressEvent } from "../api/client";
 import type { ChatResponse } from "../types";
 import MessageBubble from "./MessageBubble";
 
-interface Props {
-  hasDocuments: boolean; // 知识库是否有文档
-}
+interface Props { hasDocuments: boolean; }
+
+const STEPS = ["route","rewrite","search","rerank","done","generate"];
+const STEP_LABELS: Record<string, string> = {
+  route: "分析", rewrite: "改写", search: "召回",
+  rerank: "精排", done: "完成", generate: "生成",
+};
 
 export default function ChatPanel({ hasDocuments }: Props) {
   const [messages, setMessages] = useState<ChatResponse[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到底部
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, progress]);
 
   const handleSend = async (e?: FormEvent) => {
     e?.preventDefault();
     const question = input.trim();
     if (!question || loading) return;
+    setInput(""); setError(null); setLoading(true);
+    setProgress({ step: "start", message: "正在处理…" });
 
-    setInput("");
-    setError(null);
-    setLoading(true);
-
-    try {
-      const response = await askQuestion({ question });
-      setMessages((prev) => [...prev, response]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "问答请求失败");
-    } finally {
-      setLoading(false);
-    }
+    await askQuestionStream(
+      { question },
+      (evt) => setProgress(evt),
+      (answer, sources) => {
+        setMessages(prev => [...prev, { question, answer, sources }]);
+        setLoading(false); setProgress(null);
+      },
+      (err) => { setError(err); setLoading(false); setProgress(null); },
+    );
   };
 
   return (
     <div className="chat-panel-inner">
-      {/* 消息列表 */}
       <div className="messages-container">
         {messages.length > 0 && (
           <div className="chat-toolbar">
-            <span>共 {messages.length} 轮对话</span>
-            <button
-              className="btn-clear"
-              onClick={() => {
-                if (confirm("确定要清空所有对话记录吗？")) {
-                  setMessages([]);
-                }
-              }}
-            >
-              🗑️ 清空对话
+            <span>{messages.length} 轮对话</span>
+            <button className="btn-clear" onClick={() => { if (confirm("清空对话？")) setMessages([]); }}>
+              清空
             </button>
           </div>
         )}
-
-        {messages.length === 0 && (
+        {messages.length === 0 && !loading && (
           <div className="chat-empty">
-            <p className="chat-empty-icon">💬</p>
-            <p>
-              {hasDocuments
-                ? "在下方输入问题，基于已上传的资料获取回答。"
-                : "请先上传文档到左侧知识库，再开始提问。"}
-            </p>
+            <p className="chat-empty-icon">📚</p>
+            <p>{hasDocuments ? "基于你的知识库，开始提问吧" : "先上传文档到左侧知识库"}</p>
           </div>
         )}
+        {messages.map((msg, i) => (<MessageBubble key={i} message={msg} />))}
 
-        {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} />
-        ))}
-
-        {loading && (
+        {loading && progress && (
           <div className="message ai-message">
-            <div className="message-bubble ai-bubble thinking">
-              正在检索资料并生成回答...
+            <div className="message-bubble ai-bubble" style={{ minWidth: 280 }}>
+              <div className="progress-bar-container">
+                <div className="progress-steps">
+                  {STEPS.map((step) => {
+                    const idx = STEPS.indexOf(step);
+                    const curIdx = STEPS.indexOf(progress.step);
+                    let cls = "progress-step";
+                    if (idx < curIdx) cls += " done";
+                    else if (idx === curIdx) cls += " active";
+                    return (
+                      <div key={step} className={cls}>
+                        <div className="progress-dot" />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="progress-labels">
+                  {STEPS.map(step => {
+                    const curIdx = STEPS.indexOf(progress.step);
+                    const idx = STEPS.indexOf(step);
+                    let labelCls = "progress-label";
+                    if (idx <= curIdx) labelCls += " active";
+                    return <span key={step} className={labelCls}>{STEP_LABELS[step]}</span>;
+                  })}
+                </div>
+                <p className="progress-msg">{progress.message}</p>
+              </div>
             </div>
           </div>
         )}
-
-        {error && <p className="upload-error">{error}</p>}
+        {error && <p className="upload-error" style={{ margin: "0 24px" }}>{error}</p>}
         <div ref={bottomRef} />
       </div>
 
-      {/* 输入区域 */}
       <form className="chat-input-area" onSubmit={handleSend}>
-        <input
-          type="text"
-          className="chat-input"
-          placeholder={hasDocuments ? "输入您的问题..." : "请先上传文档..."}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          className="btn-send"
-          disabled={!input.trim() || loading}
-        >
-          {loading ? "思考中..." : "发送"}
+        <input type="text" className="chat-input"
+          placeholder={hasDocuments ? "输入你的问题…" : "请先上传文档"}
+          value={input} onChange={e => setInput(e.target.value)} disabled={loading} />
+        <button type="submit" className="btn-send" disabled={!input.trim() || loading}>
+          {loading ? "思考中" : "发送"}
         </button>
       </form>
     </div>

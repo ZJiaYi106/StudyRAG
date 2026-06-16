@@ -40,13 +40,15 @@ export default function DocList({ refreshKey }: Props) {
   return (
     <div className="doc-list">
       {docs.length === 0 ? (
-        <p className="muted">暂无文档，请上传 PDF 或 Markdown 文件。</p>
+        <p className="muted">知识库为空，上传你的第一份文档吧</p>
       ) : (
         <ul>
           {docs.map((doc) => (
             <li key={doc.id} className="doc-item">
               <div className="doc-info">
-                <span className="doc-icon">{doc.file_type === "pdf" ? "📄" : "📝"}</span>
+                <span className="doc-icon">{
+                  { pdf:"📄", markdown:"📝", txt:"📃", docx:"📘", pptx:"📊", excel:"📈" }[doc.file_type] || "📎"
+                }</span>
                 <div className="doc-meta">
                   <span className="doc-name" title={doc.filename}>{doc.filename}</span>
                   <span className="doc-detail">

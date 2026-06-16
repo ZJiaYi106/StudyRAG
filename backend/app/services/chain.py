@@ -1,177 +1,148 @@
 """
-RAG Chain 服务
-使用 LangChain LCEL（LangChain Expression Language）构建完整问答链
+RAG 问答服务（生产级检索链路）
 
-LangChain 组件 #7：Runnable / LCEL（LangChain Expression Language）
-- 作用：用管道符 | 将多个组件串联成一个可执行的 Chain
-- 核心理念：每个组件都是 Runnable，输入输出统一 → 可以像搭积木一样组合
-- 管道操作：data | step1 | step2 | step3，数据从左到右流经每个步骤
+链路：
+  Query → Router(分类) → Rewriter(改写+HyDE)
+       → 多查询 Dense+Sparse 粗排 → 去重合并
+       → CrossEncoder Rerank 一次精排
+       → LLM 生成回答
 
-Chain 结构（本项目的 RAG 问答链）：
-
-  用户问题 "什么是 Transformer？"
-      │
-      ▼
-  ┌─────────────────────────────────────┐
-  │  {                                  │
-  │    "context":  RunnableLambda(...),  │  ← 检索 + 格式化
-  │    "question": RunnablePassthrough() │  ← 原样传递问题
-  │  }                                  │
-  └──────────────┬──────────────────────┘
-                 │ {"context": "...", "question": "..."}
-                 ▼
-  ┌─────────────────────────────────────┐
-  │  ChatPromptTemplate                 │  ← 填入 System + Human 模板
-  └──────────────┬──────────────────────┘
-                 │ ChatPromptValue (messages)
-                 ▼
-  ┌─────────────────────────────────────┐
-  │  ChatOpenAI (LLM)                   │  ← 生成回答
-  └──────────────┬──────────────────────┘
-                 │ AIMessage
-                 ▼
-  ┌─────────────────────────────────────┐
-  │  StrOutputParser()                  │  ← 提取纯文本
-  └──────────────┬──────────────────────┘
-                 │ "Transformer 是一种基于自注意力机制的..."
-                 ▼
-           最终回答（纯文本）
+优化要点：
+- 检索只跑一次，不在 Chain 里重复触发
+- Rerank 只在最后统一跑一次（而非每条改写都跑）
 """
 
+import json
 import logging
-from typing import Dict, Any
+import asyncio
+import queue
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, AsyncGenerator
 
-# LangChain: RunnablePassthrough —— 原样传递输入，不做任何转换
-# LangChain: RunnableLambda —— 将普通函数包装为 Runnable
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-
-# LangChain: StrOutputParser —— 从 AIMessage 中提取纯文本字符串
 from langchain_core.output_parsers import StrOutputParser
-
-# LangChain: ChatOpenAI —— OpenAI API 兼容的大语言模型
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
-from app.services.retriever import retrieve
 from app.services.prompt import build_prompt_template, format_context
+from app.services.hybrid_searcher import get_hybrid_searcher
+from app.services.query_rewriter import get_query_rewriter
+from app.services.router import get_router
+from app.services.reranker import CrossEncoderReranker
+from app.models.search import SearchResult
 
 logger = logging.getLogger(__name__)
 
-
-# ================================================================
-# 检索函数（包装为 RunnableLambda）
-# ================================================================
-
-def _retrieve_and_format(question: str) -> str:
-    """
-    检索并格式化参考资料来源文本。
-    这个函数会被包装为 RunnableLambda，嵌入到 LCEL Chain 中。
-
-    --- LangChain 教学 ---
-    输入: str（用户问题）
-    输出: str（格式化的参考资料来源文本 → 注入 {context} 变量）
-    """
-    retrieved = retrieve(question)
-    if not retrieved:
-        logger.info("[Chain] 未检索到相关参考资料")
-    return format_context(retrieved)
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
-# ================================================================
-# 构建 RAG Chain
-# ================================================================
+def _full_search_sync(query: str, top_k: int, event_q: queue.Queue, owner: str = "") -> list[dict]:
+    """在后台线程中运行检索，owner 用于多用户数据隔离"""
+    def _emit(step: str, msg: str):
+        event_q.put({"step": step, "message": msg})
+        logger.info(f"[Progress] {step}: {msg}")
 
-def build_rag_chain():
-    """
-    使用 LCEL 构建完整的 RAG 问答链。
+    searcher = get_hybrid_searcher()
+    router = get_router()
+    rewriter = get_query_rewriter()
 
-    --- LangChain 教学：详解每一步 ---
+    # Step 1: Router + Rewriter 并行
+    _emit("route", "正在分析问题类型并改写查询...")
+    future_route = _executor.submit(router.get_config, query)
+    future_rewrite = _executor.submit(rewriter.rewrite, query, True)
 
-    Step 1: 并行准备变量
-    {
-        "context": RunnableLambda(_retrieve_and_format),  ← 检索资料
-        "question": RunnablePassthrough(),                ← 问题原样传递
-    }
-    输入: "什么是 Transformer？"
-    输出: {"context": "[1] (来源: ...) ...", "question": "什么是 Transformer？"}
+    route_config = future_route.result()
+    rewritten_queries = future_rewrite.result()
 
-    Step 2: PromptTemplate
-    输入: {"context": str, "question": str}
-    输出: ChatPromptValue（SystemMessage + HumanMessage）
+    search_top_k = route_config.get("top_k", top_k)
+    enable_sparse = route_config.get("enable_sparse", True)
+    enable_rerank = route_config.get("enable_rerank", True)
+    recall_k = max(search_top_k * 3, 10)
 
-    Step 3: ChatOpenAI (LLM)
-    输入: ChatPromptValue
-    输出: AIMessage(content="Transformer 是...")
+    _emit("rewrite", f"问题分类: {route_config.get('query_type','?')}，改写 {len(rewritten_queries)} 条查询，启动多路召回")
 
-    Step 4: StrOutputParser
-    输入: AIMessage
-    输出: "Transformer 是..."（纯文本字符串）
+    # Step 2: 多路召回
+    _emit("search", "正在执行语义检索 + 关键词检索...")
+    seen: set[str] = set()
+    all_results: list[dict] = []
 
-    Returns:
-        一个可调用的 LCEL Chain，.invoke("问题") → "回答"
-    """
-    # 初始化 LLM
-    llm = ChatOpenAI(
-        model=settings.llm_model,
-        openai_api_key=settings.llm_api_key.get_secret_value(),
-        openai_api_base=settings.llm_api_base,
-        temperature=0.1,  # 低温度减少幻觉，让回答更忠实于参考资料
-    )
+    for q in rewritten_queries:
+        results = searcher.search(q, top_k=recall_k, enable_sparse=enable_sparse, enable_rerank=False, owner=owner)
+        for r in results:
+            key = r.content[:80]
+            if key not in seen:
+                seen.add(key)
+                all_results.append(r.to_dict())
 
-    # 获取 Prompt 模板
-    prompt = build_prompt_template()
+    all_results.sort(key=lambda x: x["score"], reverse=True)
+    _emit("search", f"多路召回完成，共 {len(all_results)} 条候选")
 
-    # --- LCEL: 用管道符 | 串联所有步骤 ---
-    # 这是 LangChain 最核心的语法，每个 | 将前一步的输出传给下一步的输入
-    rag_chain = (
-        {
-            "context": RunnableLambda(_retrieve_and_format),
-            "question": RunnablePassthrough(),
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    # Step 3: Rerank
+    if enable_rerank and all_results:
+        _emit("rerank", f"正在 Cross-Encoder 精排 {min(len(all_results), 10)} 条候选...")
+        _valid_fields = {f.name for f in SearchResult.__dataclass_fields__.values()}
+        candidates = [
+            SearchResult(**{k: v for k, v in r.items() if k in _valid_fields})
+            for r in all_results[:6]
+        ]
+        reranker = CrossEncoderReranker()
+        final = reranker.rerank(query, candidates, top_k=search_top_k)
+        final_dicts = [r.to_dict() for r in final]
+    else:
+        final_dicts = all_results[:search_top_k]
 
-    logger.info("[Chain] RAG Chain 构建完成")
-    return rag_chain
+    _emit("done", f"检索完成，精选 {len(final_dicts)} 条参考资料")
+    return final_dicts
 
 
-# ================================================================
-# 便捷问答函数
-# ================================================================
-
-def ask(question: str) -> Dict[str, Any]:
-    """
-    执行 RAG 问答：检索 → 生成 → 返回答案 + 来源。
-
-    这是一个高层封装，供 API 路由直接调用。
-    它将 Chain 的执行和来源追踪分开处理：
-    1. 先执行检索（拿到格式化前的 sources，用于返回给前端）
-    2. 再执行 Chain（拿到 LLM 回答）
-
-    --- LangChain 教学 ---
-    输入: str（用户问题）
-    输出: dict {"answer": str, "sources": List[dict]}
-
-    Args:
-        question: 用户问题
-
-    Returns:
-        {"answer": LLM 生成的回答, "sources": 引用来源列表}
-    """
-    # Step 1: 检索（拿到原始结果，用于前端展示来源卡片）
-    retrieved = retrieve(question)
-
-    # Step 2: 格式化参考资料来源
+def ask(question: str, owner: str = "") -> Dict[str, Any]:
+    """同步问答"""
+    q: queue.Queue = queue.Queue()
+    retrieved = _full_search_sync(question, 4, q, owner=owner)
     context = format_context(retrieved)
+    llm = ChatOpenAI(
+        model=settings.llm_model, openai_api_key=settings.llm_api_key.get_secret_value(),
+        openai_api_base=settings.llm_api_base, temperature=0.1,
+    )
+    prompt = build_prompt_template()
+    chain = prompt | llm | StrOutputParser()
+    answer = chain.invoke({"context": context, "question": question})
+    return {"answer": answer, "sources": retrieved}
 
-    # Step 3: 构建并执行 Chain
-    chain = build_rag_chain()
-    answer = chain.invoke(question)
 
-    # Step 4: 组装响应
-    return {
-        "answer": answer,
-        "sources": retrieved,  # 原始检索结果（含 excerpt, filename, page 等）
-    }
+async def ask_stream(question: str, owner: str = "") -> AsyncGenerator[str, None]:
+    """流式问答——SSE 实时进度 + 最终结果，owner 用于用户隔离"""
+    event_q: queue.Queue = queue.Queue()
+    loop = asyncio.get_event_loop()
+
+    future = loop.run_in_executor(_executor, _full_search_sync, question, 4, event_q, owner)
+
+    # 实时消费事件（每 100ms 检查一次队列）
+    while not future.done() or not event_q.empty():
+        try:
+            evt = event_q.get_nowait()
+            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+        except queue.Empty:
+            await asyncio.sleep(0.1)
+
+    # 排空最后的事件
+    while not event_q.empty():
+        evt = event_q.get_nowait()
+        yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+    retrieved = future.result()
+
+    # Phase 2: LLM 生成
+    yield f"data: {json.dumps({'step': 'generate', 'message': '正在 LLM 生成回答...'}, ensure_ascii=False)}\n\n"
+
+    context = format_context(retrieved)
+    llm = ChatOpenAI(
+        model=settings.llm_model, openai_api_key=settings.llm_api_key.get_secret_value(),
+        openai_api_base=settings.llm_api_base, temperature=0.1,
+    )
+    prompt = build_prompt_template()
+    chain = prompt | llm | StrOutputParser()
+    answer = chain.invoke({"context": context, "question": question})
+
+    # Phase 3: 最终结果
+    result = {"step": "result", "answer": answer, "sources": retrieved}
+    yield f"data: {json.dumps(result, ensure_ascii=False)}\n\n"

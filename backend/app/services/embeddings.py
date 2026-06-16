@@ -99,3 +99,19 @@ def embed_query(text: str) -> List[float]:
     """
     embeddings = get_embeddings()
     return embeddings.embed_query(text)
+
+
+# ================================================================
+# 适配器：实现 BaseEmbedder 接口
+# ================================================================
+
+from app.services.interfaces import BaseEmbedder as _BaseEmbedder
+
+
+class EmbeddingService(_BaseEmbedder):
+    """Embedding 服务（实现 BaseEmbedder 接口）"""
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return embed_documents(texts)
+
+    def embed_query(self, query: str) -> List[float]:
+        return embed_query(query)

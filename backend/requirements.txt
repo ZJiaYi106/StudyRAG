@@ -20,6 +20,10 @@ python-pptx==1.0.2
 openpyxl==3.1.5
 xlrd==2.0.2
 
+# --- OCR（需额外安装 Tesseract 系统程序 + 中文语言包）---
+pytesseract==0.3.13
+Pillow==11.1.0
+
 # --- 配置管理 ---
 pydantic-settings==2.7.1
 
@@ -34,3 +38,11 @@ httpx==0.28.1
 # --- 认证 ---
 bcrypt==4.2.1
 python-jose[cryptography]==3.5.0
+
+# --- 混合检索 ---
+rank_bm25==0.2.2
+sentence-transformers==5.6.1
+jieba==0.42.1
+
+# --- 评测 ---
+ragas==0.4.3

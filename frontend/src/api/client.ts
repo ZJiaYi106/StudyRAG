@@ -201,3 +201,65 @@ export async function askQuestion(body: ChatRequest): Promise<ChatResponse> {
     body: JSON.stringify(body),
   });
 }
+
+/** SSE 进度事件 */
+export interface ProgressEvent {
+  step: string;
+  message: string;
+  answer?: string;
+  sources?: ChatResponse["sources"];
+}
+
+/** 流式提问（SSE），支持进度回调 */
+export async function askQuestionStream(
+  body: ChatRequest,
+  onProgress: (evt: ProgressEvent) => void,
+  onDone: (answer: string, sources: ChatResponse["sources"]) => void,
+  onError: (err: string) => void,
+): Promise<void> {
+  const token = getToken();
+  try {
+    const response = await fetch(`${API_BASE}/api/chat/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const msg = await extractError(response);
+      onError(msg);
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) { onError("无法读取响应流"); return; }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = JSON.parse(line.slice(6)) as ProgressEvent;
+          if (data.step === "result") {
+            onDone(data.answer || "", data.sources || []);
+          } else {
+            onProgress(data);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    onError(err instanceof Error ? err.message : "请求失败");
+  }
+}

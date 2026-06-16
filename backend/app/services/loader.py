@@ -68,6 +68,41 @@ def load_pdf(file_path: str, document_id: str) -> List[Document]:
             "chapter": None,                  # PDF 暂不提取章节（后续可加书签提取）
         })
 
+    # --- OCR + VLM 增强：对文本量少的页面做 OCR，提取图片用 VLM 描述 ---
+    for doc in docs:
+        page_num = doc.metadata.get("page", 0) + 1  # 1-indexed
+        text_len = len(doc.page_content.strip())
+
+        # OCR：文本少的页面可能是扫描件
+        if text_len < settings.pdf_ocr_min_chars:
+            try:
+                from app.services.ocr import ocr_page
+                logger.info(f"[Document Loader] 第{page_num}页文本仅{text_len}字符，启动 OCR...")
+                ocr_text = ocr_page(file_path, page_num - 1)
+                if ocr_text:
+                    doc.page_content = ocr_text.strip()
+                    logger.info(f"[Document Loader] 第{page_num}页 OCR 完成: {len(ocr_text)} 字符")
+            except ImportError:
+                logger.debug(f"[Document Loader] OCR 未安装，跳过第{page_num}页")
+            except Exception as e:
+                logger.warning(f"[Document Loader] 第{page_num}页 OCR 失败: {e}")
+
+        # VLM：提取页面内嵌图片并生成文字描述，追加到 page_content
+        try:
+            from app.services.ocr import extract_images_from_pdf, describe_image_vlm
+            images = extract_images_from_pdf(file_path, page_num - 1)
+            if images:
+                logger.info(f"[Document Loader] 第{page_num}页提取到 {len(images)} 张图片，启动 VLM...")
+                for img_idx, img_bytes in enumerate(images):
+                    desc = describe_image_vlm(img_bytes)
+                    if desc:
+                        doc.page_content += f"\n[图片{img_idx+1}描述] {desc}"
+                        logger.info(f"[Document Loader] VLM 描述完成: {desc[:60]}...")
+        except ImportError:
+            logger.debug(f"[Document Loader] VLM 依赖缺失，跳过图片分析")
+        except Exception as e:
+            logger.warning(f"[Document Loader] 第{page_num}页 VLM 失败: {e}")
+
     logger.info(f"[Document Loader] PDF 加载完成: {filename}, 共 {len(docs)} 页")
     return docs
 
@@ -523,3 +558,16 @@ def load_document(file_path: str, document_id: str) -> List[Document]:
         return load_excel(file_path, document_id)
     else:
         raise ValueError(f"不支持的文件类型: {ext}")
+
+
+# ================================================================
+# 适配器：实现 BaseLoader 接口
+# ================================================================
+
+from app.services.interfaces import BaseLoader as _BaseLoader
+
+
+class LoaderService(_BaseLoader):
+    """文档加载器服务（实现 BaseLoader 接口）"""
+    def load(self, file_path: str, document_id: str) -> List[Document]:
+        return load_document(file_path, document_id)

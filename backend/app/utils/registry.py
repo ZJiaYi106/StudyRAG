@@ -58,6 +58,7 @@ def add_record(
     page_count: int,
     chunk_count: int,
     chunk_strategy: str = "recursive",
+    owner: str = "",
 ) -> dict:
     """添加一条文档记录"""
     record = {
@@ -67,6 +68,7 @@ def add_record(
         "page_count": page_count,
         "chunk_count": chunk_count,
         "chunk_strategy": chunk_strategy,
+        "owner": owner,
         "created_at": datetime.now().isoformat(),
     }
 
@@ -86,9 +88,11 @@ def get_record(document_id: str) -> Optional[dict]:
     return None
 
 
-def list_records() -> list[dict]:
-    """列出所有记录，按创建时间降序"""
+def list_records(owner: str = "") -> list[dict]:
+    """列出记录，可选按 owner 过滤，按创建时间降序"""
     records = load_registry()
+    if owner:
+        records = [r for r in records if r.get("owner") == owner]
     records.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return records
 

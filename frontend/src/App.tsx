@@ -96,8 +96,8 @@ function App() {
     <div className="app-container">
       {/* 顶部导航 */}
       <header className="app-header">
-        <h1>📚 StudyRAG</h1>
-        <span className="subtitle">RAG 知识库问答系统</span>
+        <h1>StudyRAG</h1>
+        <span className="subtitle">知识库问答</span>
         <span className={`status-badge ${health ? "online" : "offline"}`}>
           {health
             ? `🟢 后端已连接（${health.document_count} 篇文档）`

@@ -17,6 +17,8 @@ from app.config import settings
 from app.models.document import DocumentUploadResponse, DocumentListItem, DeleteResponse
 from app.utils.auth import get_current_user
 from app.utils.file_utils import validate_file, save_upload_file, remove_file
+from app.services.retrievers.bm25_retriever import get_bm25_retriever
+from app.utils.hash_store import is_duplicate, mark_indexed, remove_by_document_id as remove_hash
 from app.utils.registry import add_record, list_records, delete_record, get_record
 from app.services.loader import load_document
 from app.services.splitter import split_documents
@@ -87,6 +89,15 @@ async def upload_document(
 
     # --- 步骤 3-5: Loader → Splitter → VectorStore ---
     try:
+        # 2b. 增量索引检查（按用户隔离）
+        existing_id = is_duplicate(file_path, owner=user)
+        if existing_id:
+            remove_file(file_path)
+            raise HTTPException(
+                status_code=409,
+                detail=f"该文件已上传过（文档 ID: {existing_id}），无需重复上传。"
+            )
+
         # 3. 加载文档（LangChain Document Loader）
         docs = load_document(file_path, document_id)
         if not docs:
@@ -99,8 +110,15 @@ async def upload_document(
         if not chunks:
             raise ValueError("文档切分结果为空")
 
-        # 5. 向量化并存入 Chroma（LangChain Chroma VectorStore）
-        chunk_ids = add_documents(chunks)
+        # 5. 向量化并存入 Chroma（带 owner 做用户隔离）
+        chunk_ids = add_documents(chunks, owner=user)
+
+        # 5b. 同步 BM25 索引
+        try:
+            bm25 = get_bm25_retriever()
+            bm25.add_chunks(chunks)
+        except Exception as e:
+            logger.warning(f"[上传] BM25 索引同步失败（不影响主流程）: {e}")
 
     except ValueError as e:
         # 解析或切分失败时清理已保存的文件
@@ -113,6 +131,9 @@ async def upload_document(
         logger.error(f"[上传] VectorStore 入库失败: {e}")
         raise HTTPException(status_code=500, detail=f"文档入库失败: {e}")
 
+    # --- 步骤 5c: 标记文件已入库（Hash 去重） ---
+    mark_indexed(file_path, original_filename, document_id, owner=user)
+
     # --- 步骤 6: 登记到注册表 ---
     record = add_record(
         document_id=document_id,
@@ -121,6 +142,7 @@ async def upload_document(
         page_count=page_count,
         chunk_count=len(chunks),
         chunk_strategy=chunk_strategy,
+        owner=user,
     )
 
     logger.info(
@@ -142,8 +164,8 @@ async def upload_document(
 
 @router.get("", response_model=list[DocumentListItem])
 async def list_documents(user: str = Depends(get_current_user)):
-    """列出所有已上传的文档，按上传时间降序"""
-    records = list_records()
+    """列出当前用户已上传的文档，按上传时间降序"""
+    records = list_records(owner=user)
     logger.info(f"[列表] 返回 {len(records)} 个文档")
     return [
         DocumentListItem(
@@ -171,6 +193,10 @@ async def delete_document(document_id: str, user: str = Depends(get_current_user
     if not record:
         raise HTTPException(status_code=404, detail=f"文档不存在: {document_id}")
 
+    # 校验文档归属（只有文档 owner 才能删除）
+    if record.get("owner") and record["owner"] != user:
+        raise HTTPException(status_code=403, detail="无权删除该文档，它不属于你。")
+
     filename = record["filename"]
 
     # 1. 从 Chroma 删除向量
@@ -180,6 +206,16 @@ async def delete_document(document_id: str, user: str = Depends(get_current_user
     except Exception as e:
         logger.error(f"[删除] Chroma 删除失败: {e}")
         raise HTTPException(status_code=500, detail=f"向量删除失败: {e}")
+
+    # 1b. 同步删除 BM25 索引
+    try:
+        bm25 = get_bm25_retriever()
+        bm25.remove_by_document_id(document_id)
+    except Exception as e:
+        logger.warning(f"[删除] BM25 索引同步删除失败（不影响主流程）: {e}")
+
+    # 1c. 同步删除 Hash 记录
+    remove_hash(document_id)
 
     # 2. 从注册表删除
     delete_record(document_id)

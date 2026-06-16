@@ -59,19 +59,29 @@ def get_vectorstore() -> Chroma:
     global _vectorstore
 
     if _vectorstore is None:
-        os.makedirs(CHROMA_PERSIST_DIR, exist_ok=True)
-
-        logger.info(f"[VectorStore] 初始化 Chroma（持久化路径: {CHROMA_PERSIST_DIR}）")
-
-        # LangChain: Chroma 构造函数
-        # - embedding_function: 传入 Embeddings 实例，add_documents 时自动向量化
-        # - persist_directory: 本地持久化目录
-        # - collection_name: 集合名（相当于数据库中的"表"）
-        _vectorstore = Chroma(
-            embedding_function=get_embeddings(),
-            persist_directory=CHROMA_PERSIST_DIR,
-            collection_name=settings.chroma_collection,
-        )
+        if settings.chroma_mode == "remote":
+            # 远程模式：连接 Docker 中的独立 Chroma 服务
+            import chromadb
+            client = chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
+            logger.info(
+                f"[VectorStore] 初始化 Chroma（远程模式: {settings.chroma_host}:{settings.chroma_port}）"
+            )
+            _vectorstore = Chroma(
+                client=client,
+                embedding_function=get_embeddings(),
+                collection_name=settings.chroma_collection,
+                collection_metadata={"hnsw:space": "cosine"},
+            )
+        else:
+            # 嵌入式模式：Chroma 内嵌在 Python 进程中
+            os.makedirs(CHROMA_PERSIST_DIR, exist_ok=True)
+            logger.info(f"[VectorStore] 初始化 Chroma（嵌入式: {CHROMA_PERSIST_DIR}）")
+            _vectorstore = Chroma(
+                embedding_function=get_embeddings(),
+                persist_directory=CHROMA_PERSIST_DIR,
+                collection_name=settings.chroma_collection,
+                collection_metadata={"hnsw:space": "cosine"},
+            )
 
     return _vectorstore
 
@@ -80,51 +90,27 @@ def get_vectorstore() -> Chroma:
 # 入库操作
 # ================================================================
 
-def add_documents(docs: List[Document]) -> List[str]:
-    """
-    将文档列表向量化并存入 Chroma。
-
-    数据流：
-    List[Document] → Embeddings.embed_documents() → 向量
-                   → Chroma 存储（向量 + 文本 + metadata）
-
-    --- LangChain 教学 ---
-    输入: List[Document]（来自 Splitter，已切分好的 chunks）
-    输出: List[str]（每个 chunk 在 Chroma 中的唯一 ID）
-
-    Chroma 内部存储结构（每个 chunk 一行）：
-    | id        | embedding (1536维) | document (原文)  | metadata            |
-    |-----------|---------------------|------------------|---------------------|
-    | uuid-001  | [0.01, -0.03, ...] | "Transformer是..." | {filename, page, ...} |
-    | uuid-002  | [0.05, 0.02, ...]  | "自注意力机制..."  | {filename, page, ...} |
-
-    Args:
-        docs: 待入库的 Document 列表（chunks，已含 metadata）
-
-    Returns:
-        Chroma 分配的 ID 列表
-    """
+def add_documents(docs: List[Document], owner: str = "") -> List[str]:
+    """将文档列表向量化并存入 Chroma，owner 用于多用户隔离"""
     if not docs:
         logger.warning("[VectorStore] 空文档列表，跳过人库")
         return []
 
-    store = get_vectorstore()
+    # 注入 owner 到 metadata
+    if owner:
+        for doc in docs:
+            doc.metadata["owner"] = owner
 
-    # 分批入库，避免单次请求超过智谱等服务的 Token 限制
+    store = get_vectorstore()
     BATCH_SIZE = 10
     all_ids = []
 
     for i in range(0, len(docs), BATCH_SIZE):
         batch = docs[i:i + BATCH_SIZE]
-        logger.info(
-            f"[VectorStore] 入库批次 {i // BATCH_SIZE + 1}: "
-            f"{len(batch)} 个 chunk (第 {i + 1}-{min(i + BATCH_SIZE, len(docs))}/{len(docs)})"
-        )
         batch_ids = store.add_documents(batch)
         all_ids.extend(batch_ids)
 
-    logger.info(f"[VectorStore] 入库完成: 共 {len(all_ids)} 个 ID（{len(docs)} 个 chunk）")
-
+    logger.info(f"[VectorStore] 入库完成: 共 {len(all_ids)} 个 ID（{len(docs)} 个 chunk, owner={owner}）")
     return all_ids
 
 
@@ -135,49 +121,50 @@ def add_documents(docs: List[Document]) -> List[str]:
 def similarity_search(
     query: str,
     k: int | None = None,
+    owner: str = "",
 ) -> List[Tuple[Document, float]]:
     """
-    根据查询文本检索最相似的 K 个文档片段。
-    返回 (Document, 相似度分数) 元组列表，按分数降序排列。
-
-    --- LangChain 教学 ---
-    输入: str（用户问题）
-    输出: List[Tuple[Document, float]]
-          - Document: 检索到的 chunk（含 page_content 和 metadata）
-          - float: 余弦相似度分数（0~1，越大越相关）
-
-    内部流程：
-    1. 将 query 向量化（embed_query）
-    2. 与 Chroma 中所有向量计算余弦相似度
-    3. 返回相似度最高的 K 个
-
-    Args:
-        query: 查询文本
-        k: 返回结果数，默认从配置读取（TOP_K=4）
-
-    Returns:
-        [(Document, score), ...] 按相似度降序排列
+    检索最相似的 K 个文档片段。
+    owner 参数用于多用户数据隔离——只检索该用户上传的文档。
     """
     if k is None:
         k = settings.top_k
 
     store = get_vectorstore()
 
-    # LangChain: similarity_search_with_score()
-    # 与 similarity_search() 的区别：这个返回分数，另一个只返回 Document
-    results = store.similarity_search_with_score(query, k=k)
+    # 直接用 Chroma raw API，绕过 langchain_chroma 可能不转换距离的问题
+    # 使用 store 自身的 embedding_function 以确保维度匹配
+    query_vec = store._embedding_function.embed_query(query)
+
+    where_filter = {"owner": owner} if owner else None
+    raw = store._collection.query(
+        query_embeddings=[query_vec],
+        n_results=k,
+        where=where_filter,
+        include=["documents", "metadatas", "distances"],
+    )
+
+    from langchain_core.documents import Document as LCDocument
+
+    normalized: List[Tuple[LCDocument, float]] = []
+    if raw["ids"] and raw["ids"][0]:
+        for i in range(len(raw["ids"][0])):
+            doc = LCDocument(
+                page_content=raw["documents"][0][i],
+                metadata=raw["metadatas"][0][i] or {},
+            )
+            # Chroma 返回 cos distance = 1 - cos_sim
+            # 转换: similarity = 1 - distance → 0=无关, 1=完全相同
+            distance = raw["distances"][0][i]
+            similarity = 1.0 - distance
+            similarity = max(0.0, min(1.0, similarity))
+            normalized.append((doc, round(similarity, 4)))
 
     logger.info(
         f"[VectorStore] 检索完成: query='{query[:30]}...', "
-        f"返回 {len(results)} 条结果"
+        f"返回 {len(normalized)} 条结果"
     )
-    for doc, score in results:
-        logger.debug(
-            f"  [{score:.4f}] {doc.metadata.get('filename', '?')} "
-            f"p{doc.metadata.get('page', '?')} — {doc.page_content[:50]}..."
-        )
-
-    return results
+    return normalized
 
 
 # ================================================================
@@ -230,3 +217,38 @@ def get_collection_stats() -> dict:
         "collection_name": collection.name,
         "count": collection.count(),
     }
+
+
+# ================================================================
+# 适配器：实现 BaseIndexer 接口
+# ================================================================
+
+from app.services.interfaces import BaseIndexer as _BaseIndexer
+from app.models.search import SearchResult
+
+
+class ChromaIndexer(_BaseIndexer):
+    """Chroma 索引服务（实现 BaseIndexer 接口）"""
+
+    def add(self, docs: List[Document]) -> List[str]:
+        return add_documents(docs)
+
+    def delete(self, document_id: str) -> int:
+        return delete_by_document_id(document_id)
+
+    def search(self, query: str, top_k: int = 4, owner: str = "") -> List[SearchResult]:
+        """向量相似度搜索，按 owner 过滤"""
+        results = similarity_search(query, k=top_k, owner=owner)
+        search_results = []
+        for doc, score in results:
+            search_results.append(SearchResult(
+                content=doc.page_content,
+                score=score,
+                filename=doc.metadata.get("filename", ""),
+                page=doc.metadata.get("page"),
+                chapter=doc.metadata.get("chapter"),
+                document_id=doc.metadata.get("document_id", ""),
+                chunk_index=doc.metadata.get("chunk_index", 0),
+                source="dense",
+            ))
+        return search_results

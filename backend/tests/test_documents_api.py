@@ -21,13 +21,16 @@ client = TestClient(app)
 class TestUploadDocument:
     """测试 POST /api/documents"""
 
+    @patch("app.routers.documents.add_record")
+    @patch("app.routers.documents.mark_indexed")
+    @patch("app.routers.documents.is_duplicate", return_value=None)
     @patch("app.routers.documents.add_documents")
     @patch("app.routers.documents.split_documents")
     @patch("app.routers.documents.load_document")
-    def test_upload_pdf_success(self, mock_load, mock_split, mock_add):
+    def test_upload_pdf_success(self, mock_load, mock_split, mock_add, mock_dup, mock_mark, mock_record):
         """上传 PDF 应返回 201 和正确的响应结构"""
-        # Mock 管道各环节
         from langchain_core.documents import Document
+        from datetime import datetime
 
         mock_load.return_value = [
             Document(page_content="第1页内容", metadata={"page": 1}),
@@ -39,6 +42,11 @@ class TestUploadDocument:
             Document(page_content="chunk 3", metadata={"page": 2, "chunk_index": 2}),
         ]
         mock_add.return_value = ["id1", "id2", "id3"]
+        mock_record.return_value = {
+            "id": "test-id", "filename": "test.pdf", "file_type": "pdf",
+            "page_count": 2, "chunk_count": 3, "chunk_strategy": "recursive",
+            "created_at": datetime.now().isoformat(),
+        }
 
         pdf_content = b"%PDF-1.4 fake pdf content"
         response = client.post(
@@ -55,12 +63,16 @@ class TestUploadDocument:
         assert "id" in data
         assert "created_at" in data
 
+    @patch("app.routers.documents.add_record")
+    @patch("app.routers.documents.mark_indexed")
+    @patch("app.routers.documents.is_duplicate", return_value=None)
     @patch("app.routers.documents.add_documents")
     @patch("app.routers.documents.split_documents")
     @patch("app.routers.documents.load_document")
-    def test_upload_markdown_success(self, mock_load, mock_split, mock_add):
+    def test_upload_markdown_success(self, mock_load, mock_split, mock_add, mock_dup, mock_mark, mock_record):
         """上传 Markdown 应返回 201 和正确的 file_type"""
         from langchain_core.documents import Document
+        from datetime import datetime
 
         mock_load.return_value = [
             Document(page_content="# 章节1\n内容", metadata={"chapter": "章节1"}),
@@ -69,6 +81,11 @@ class TestUploadDocument:
             Document(page_content="chunk", metadata={"chapter": "章节1", "chunk_index": 0}),
         ]
         mock_add.return_value = ["id1"]
+        mock_record.return_value = {
+            "id": "test-md-id", "filename": "notes.md", "file_type": "markdown",
+            "page_count": 1, "chunk_count": 1, "chunk_strategy": "recursive",
+            "created_at": datetime.now().isoformat(),
+        }
 
         md_content = b"# Test\n\nSome content"
         response = client.post(

@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
 
     # --- Chroma 向量数据库 ---
-    chroma_host: str = "chroma"
-    chroma_port: int = 8000
+    chroma_mode: str = "embedded"      # "embedded"（本地）或 "remote"（Docker 服务）
+    chroma_host: str = "chroma"        # remote 模式下的主机名
+    chroma_port: int = 8000            # remote 模式下的端口
     chroma_collection: str = "studyarag_docs"
 
     # --- 上传文件存储路径 ---
@@ -47,6 +48,13 @@ class Settings(BaseSettings):
     # --- JWT 认证 ---
     jwt_secret: str = "studyarag-secret-change-in-production"
     jwt_expire_days: int = 7
+
+    # --- PDF OCR ---
+    pdf_ocr_min_chars: int = 50  # 页面文本少于该值则自动 OCR
+
+    # --- 混合检索开关 ---
+    hybrid_enable_sparse: bool = True       # BM25 关键词检索
+    hybrid_enable_rerank: bool = True       # Cross-Encoder 重排（首次需下载 2.27GB 模型）
 
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

@@ -237,3 +237,22 @@ def split_documents(
     )
 
     return chunks
+
+
+# ================================================================
+# 适配器：实现 BaseSplitter 接口
+# ================================================================
+
+from app.services.interfaces import BaseSplitter as _BaseSplitter
+
+
+class SplitterService(_BaseSplitter):
+    """文本切分器服务（实现 BaseSplitter 接口）"""
+    def split(
+        self,
+        docs: List[Document],
+        strategy: str = "recursive",
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
+    ) -> List[Document]:
+        return split_documents(docs, "pdf", strategy, chunk_size, chunk_overlap)
