@@ -30,3 +30,7 @@ chromadb==0.5.23
 pytest==8.3.4
 pytest-asyncio==0.25.0
 httpx==0.28.1
+
+# --- 认证 ---
+bcrypt==4.2.1
+python-jose[cryptography]==3.5.0

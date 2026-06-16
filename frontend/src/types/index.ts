@@ -41,6 +41,30 @@ export interface UploadOptions {
   chunkOverlap?: number;
 }
 
+/** 注册请求 */
+export interface RegisterRequest {
+  username: string;
+  password: string;
+}
+
+/** 登录请求 */
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+/** JWT Token 响应 */
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+/** 当前用户信息 */
+export interface UserInfo {
+  username: string;
+  created_at: string;
+}
+
 /** 删除响应 */
 export interface DeleteResponse {
   message: string;

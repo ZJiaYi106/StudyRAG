@@ -11,10 +11,11 @@ import uuid
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 
 from app.config import settings
 from app.models.document import DocumentUploadResponse, DocumentListItem, DeleteResponse
+from app.utils.auth import get_current_user
 from app.utils.file_utils import validate_file, save_upload_file, remove_file
 from app.utils.registry import add_record, list_records, delete_record, get_record
 from app.services.loader import load_document
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/api/documents", tags=["文档管理"])
 @router.post("", response_model=DocumentUploadResponse, status_code=201)
 async def upload_document(
     file: UploadFile = File(...),
+    user: str = Depends(get_current_user),
     chunk_strategy: str = Query(
         default="recursive",
         description="分块策略：recursive（递归分割）、token（Token 分割）、character（固定字符分割）",
@@ -139,7 +141,7 @@ async def upload_document(
 
 
 @router.get("", response_model=list[DocumentListItem])
-async def list_documents():
+async def list_documents(user: str = Depends(get_current_user)):
     """列出所有已上传的文档，按上传时间降序"""
     records = list_records()
     logger.info(f"[列表] 返回 {len(records)} 个文档")
@@ -157,7 +159,7 @@ async def list_documents():
 
 
 @router.delete("/{document_id}", response_model=DeleteResponse)
-async def delete_document(document_id: str):
+async def delete_document(document_id: str, user: str = Depends(get_current_user)):
     """
     删除指定文档及其关联数据：
     1. 从 Chroma 删除所有 chunk 向量

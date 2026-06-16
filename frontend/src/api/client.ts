@@ -11,11 +11,54 @@ import type {
   ChatResponse,
   HealthStatus,
   UploadOptions,
+  RegisterRequest,
+  LoginRequest,
+  TokenResponse,
+  UserInfo,
 } from "../types";
 
 // 后端 API 地址
 // 开发时 Vite 代理将 /api 转发到后端，生产时通过 nginx 或直接部署
 const API_BASE = "";
+
+// ================================================================
+// Token 管理
+// ================================================================
+
+const TOKEN_KEY = "studyarag_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+/**
+ * 构建带认证头的请求选项
+ */
+function authOptions(options?: RequestInit): RequestInit {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // 只有 JSON 请求设置 Content-Type（FormData 上传由浏览器自动设置）
+  if (!(options?.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  return { ...options, headers };
+}
 
 /**
  * 从 Response 中提取错误信息。
@@ -39,18 +82,13 @@ async function extractError(response: Response): Promise<string> {
 }
 
 /**
- * 通用 JSON 请求
+ * 通用 JSON 请求（自动附带认证 token）
  */
 async function request<T>(
   url: string,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${url}`, {
-    headers: {
-      "Content-Type": "application/json",
-    },
-    ...options,
-  });
+  const response = await fetch(`${API_BASE}${url}`, authOptions(options));
 
   if (!response.ok) {
     const msg = await extractError(response);
@@ -60,9 +98,51 @@ async function request<T>(
   return response.json();
 }
 
-/** 健康检查 */
+/** 健康检查（无需认证） */
 export async function checkHealth(): Promise<HealthStatus> {
-  return request<HealthStatus>("/api/health");
+  // 健康检查不需要认证，直接用 fetch
+  const response = await fetch(`${API_BASE}/api/health`);
+  if (!response.ok) {
+    throw new Error(`Health check failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+// ================================================================
+// 认证 API
+// ================================================================
+
+/** 注册 */
+export async function register(body: RegisterRequest): Promise<TokenResponse> {
+  const response = await fetch(`${API_BASE}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const msg = await extractError(response);
+    throw new Error(msg);
+  }
+  return response.json();
+}
+
+/** 登录 */
+export async function login(body: LoginRequest): Promise<TokenResponse> {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const msg = await extractError(response);
+    throw new Error(msg);
+  }
+  return response.json();
+}
+
+/** 获取当前用户信息 */
+export async function getMe(): Promise<UserInfo> {
+  return request<UserInfo>("/api/auth/me");
 }
 
 /** 上传文档 */
@@ -89,10 +169,10 @@ export async function uploadDocument(
   const url = `${API_BASE}/api/documents${queryString ? "?" + queryString : ""}`;
 
   // 不设置 Content-Type，让浏览器自动处理 multipart/form-data boundary
-  const response = await fetch(url, {
+  const response = await fetch(url, authOptions({
     method: "POST",
     body: formData,
-  });
+  }));
 
   if (!response.ok) {
     const msg = await extractError(response);

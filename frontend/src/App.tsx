@@ -4,8 +4,9 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { checkHealth, listDocuments } from "./api/client";
+import { checkHealth, listDocuments, getMe, getToken, clearToken } from "./api/client";
 import type { HealthStatus } from "./types";
+import AuthPage from "./components/AuthPage";
 import FileUpload from "./components/FileUpload";
 import DocList from "./components/DocList";
 import ChatPanel from "./components/ChatPanel";
@@ -16,26 +17,80 @@ function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [hasDocuments, setHasDocuments] = useState(false);
 
+  // --- 认证状态 ---
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null=检查中
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  // 启动时检查 token 有效性
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      setIsLoggedIn(false);
+      return;
+    }
+    // 有 token，验证是否有效
+    getMe()
+      .then((user) => {
+        setCurrentUser(user.username);
+        setIsLoggedIn(true);
+      })
+      .catch(() => {
+        clearToken();
+        setIsLoggedIn(false);
+      });
+  }, []);
+
+  // 认证成功回调
+  const onAuthSuccess = useCallback(() => {
+    getMe()
+      .then((user) => {
+        setCurrentUser(user.username);
+        setIsLoggedIn(true);
+      })
+      .catch(() => {
+        clearToken();
+        setIsLoggedIn(false);
+      });
+  }, []);
+
+  // 退出登录
+  const handleLogout = () => {
+    clearToken();
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+  };
+
   // 健康检查
   useEffect(() => {
+    if (!isLoggedIn) return;
     checkHealth()
       .then(setHealth)
       .catch((err) => setHealthError(err.message));
-  }, []);
+  }, [isLoggedIn]);
 
   // 检查知识库是否为空（用于 ChatPanel 提示）
   const checkDocs = useCallback(async () => {
+    if (!isLoggedIn) return;
     try {
       const docs = await listDocuments();
       setHasDocuments(docs.length > 0);
     } catch {
       setHasDocuments(false);
     }
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => { checkDocs(); }, [refreshKey, checkDocs]);
 
   const onUploaded = () => setRefreshKey((k) => k + 1);
+
+  // --- 渲染：未登录或检查中 ---
+  if (isLoggedIn !== true) {
+    return (
+      <div className="app-container">
+        <AuthPage onAuthSuccess={onAuthSuccess} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -50,6 +105,12 @@ function App() {
               ? "🔴 后端未连接"
               : "⏳ 连接中..."}
         </span>
+        {currentUser && (
+          <span className="user-info">
+            👤 {currentUser}
+            <button className="btn-logout" onClick={handleLogout}>退出</button>
+          </span>
+        )}
       </header>
 
       {/* 主体区域 */}
