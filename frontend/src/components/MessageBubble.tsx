@@ -1,4 +1,6 @@
 import type { ChatResponse } from "../types";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import SourceCard from "./SourceCard";
 
 interface Props { message: ChatResponse; }
@@ -11,10 +13,10 @@ export default function MessageBubble({ message }: Props) {
       </div>
       <div className="message ai-message">
         <div>
-          <div className="message-bubble ai-bubble">
-            {message.answer.split("\n").map((line, i) => (
-              <p key={i}>{line || " "}</p>
-            ))}
+          <div className="message-bubble ai-bubble markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.answer}
+            </ReactMarkdown>
           </div>
           {message.sources.length > 0 && (
             <div className="sources-section">

@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent, type ChangeEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { uploadDocument } from "../api/client";
 import type { ChunkStrategy, ChunkStrategyOption } from "../types";
 

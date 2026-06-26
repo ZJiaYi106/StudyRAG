@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # --- 混合检索开关 ---
     hybrid_enable_sparse: bool = True       # BM25 关键词检索
     hybrid_enable_rerank: bool = True       # Cross-Encoder 重排（首次需下载 2.27GB 模型）
+    rerank_model_path: str = "BAAI/bge-reranker-v2-m3"  # 重排模型：HF 模型名或本地目录
 
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

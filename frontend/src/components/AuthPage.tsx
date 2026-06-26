@@ -32,9 +32,31 @@ export default function AuthPage({ onAuthSuccess }: Props) {
 
   return (
     <div className="auth-page">
+      <div className="auth-showcase">
+        <div className="auth-showcase-mark" aria-hidden="true">
+          <span className="showcase-ring ring-one" />
+          <span className="showcase-ring ring-two" />
+          <span className="showcase-core">S</span>
+        </div>
+        <span className="eyebrow">PERSONAL KNOWLEDGE OS</span>
+        <h1>让每份资料，<br /><em>都能被重新发现。</em></h1>
+        <p className="auth-showcase-copy">
+          StudyRAG 把分散的课程资料、论文与个人笔记变成一张可追溯的知识地图。
+        </p>
+        <div className="auth-feature-list">
+          <span><b>01</b> 多格式资料解析</span>
+          <span><b>02</b> 混合检索与精准引用</span>
+          <span><b>03</b> 只基于你的知识库回答</span>
+        </div>
+      </div>
+
       <div className="auth-card">
-        <h1 className="auth-title">StudyRAG</h1>
-        <p className="auth-subtitle">个人知识库 · AI 驱动问答</p>
+        <div className="auth-card-topline">
+          <span className="auth-mini-mark">S</span>
+          <span>SECURE WORKSPACE</span>
+        </div>
+        <h1 className="auth-title">欢迎回来</h1>
+        <p className="auth-subtitle">登录你的个人知识工作区</p>
 
         <div className="auth-tabs">
           <button

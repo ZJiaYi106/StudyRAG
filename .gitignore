@@ -16,6 +16,9 @@ venv/
 # --- 数据（本地持久化） ---
 backend/data/
 
+# --- 本地模型（手动下载的 rerank 等模型） ---
+backend/models/
+
 # --- Node / 前端 ---
 node_modules/
 frontend/dist/

@@ -90,16 +90,28 @@ def get_vectorstore() -> Chroma:
 # 入库操作
 # ================================================================
 
+def _sanitize_metadata(metadata: dict) -> dict:
+    """
+    过滤元数据中 Chroma 不接受的值（None、列表、字典等）。
+    Chroma 0.5.x 只允许 str/int/float/bool 类型的元数据值。
+    """
+    return {
+        k: v for k, v in metadata.items()
+        if isinstance(v, (str, int, float, bool))
+    }
+
+
 def add_documents(docs: List[Document], owner: str = "") -> List[str]:
     """将文档列表向量化并存入 Chroma，owner 用于多用户隔离"""
     if not docs:
         logger.warning("[VectorStore] 空文档列表，跳过人库")
         return []
 
-    # 注入 owner 到 metadata
-    if owner:
-        for doc in docs:
+    # 注入 owner 到 metadata，并过滤 Chroma 不支持的值类型（如 None）
+    for doc in docs:
+        if owner:
             doc.metadata["owner"] = owner
+        doc.metadata = _sanitize_metadata(doc.metadata)
 
     store = get_vectorstore()
     BATCH_SIZE = 10

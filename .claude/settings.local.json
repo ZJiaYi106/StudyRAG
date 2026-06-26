@@ -30,7 +30,15 @@
       "Bash(rm -f data/documents.json)",
       "Bash(rm -rf data/chroma)",
       "Bash(curl -s http://127.0.0.1:8000/api/health)",
-      "Bash(curl -s http://127.0.0.1:8000/api/documents)"
+      "Bash(curl -s http://127.0.0.1:8000/api/documents)",
+      "Bash(xxd -l 16 \"1_人工智能应用开发实训_实训报告模版.doc\")",
+      "Bash(xxd -l 16 \"2_人工智能应用开发实训-课程设计报告撰写要求.doc\")",
+      "Read(//c/Program Files/LibreOffice/program/**)",
+      "Read(//c/Program Files/Microsoft Office/root/Office16/**)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/**)",
+      "Read(//c/Users/31133/AppData/Local/Kingsoft/**)",
+      "Bash(antiword -m UTF-8.txt \"2_人工智能应用开发实训-课程设计报告撰写要求.doc\")",
+      "Bash(antiword -m UTF-8.txt \"1_人工智能应用开发实训_实训报告模版.doc\")"
     ]
   }
 }

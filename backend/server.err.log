@@ -1,0 +1,286 @@
+INFO:     Started server process [21668]
+INFO:     Waiting for application startup.
+2026-08-27 10:51:18,539 [INFO] app.main: ==================================================
+2026-08-27 10:51:18,539 [INFO] app.main: StudyRAG 启动中...
+2026-08-27 10:51:18,539 [INFO] app.main: LLM 模型: deepseek-chat
+2026-08-27 10:51:18,539 [INFO] app.main: Embedding 模型: embedding-2
+2026-08-27 10:51:18,539 [INFO] app.main: 上传目录: data/uploads
+2026-08-27 10:51:18,539 [INFO] app.services.vectorstore: [VectorStore] 初始化 Chroma（嵌入式: C:\Users\31133\Desktop\StudyRag\backend\data\chroma）
+2026-08-27 10:51:18,539 [INFO] app.services.embeddings: [Embeddings] 初始化 Embedding 模型: embedding-2
+2026-08-27 10:51:18,757 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-08-27 10:51:18,848 [ERROR] chromadb.telemetry.product.posthog: Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-08-27 10:51:18,854 [ERROR] chromadb.telemetry.product.posthog: Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-08-27 10:51:18,862 [INFO] app.main: ==================================================
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-08-27 10:54:17,151 [INFO] app.routers.documents: [上传] 开始处理: 1706.03762v7.pdf (id=ab778218620c479c8046fb2f06dcdc44)
+2026-08-27 10:54:17,170 [INFO] app.services.loader: [Document Loader] 开始加载 PDF: e6cc68841b834381a48d41220ec8d0d2.pdf
+2026-08-27 10:54:17,563 [INFO] app.services.loader: [Document Loader] 第3页提取到 1 张图片，启动 VLM...
+2026-08-27 10:54:18,341 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-08-27 10:54:18,341 [WARNING] app.services.ocr: [VLM] 图片描述失败: Error code: 400 - {'error': {'message': 'This model does not support image', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}
+2026-08-27 10:54:18,388 [INFO] app.services.loader: [Document Loader] 第4页提取到 2 张图片，启动 VLM...
+2026-08-27 10:54:18,689 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-08-27 10:54:18,709 [WARNING] app.services.ocr: [VLM] 图片描述失败: Error code: 400 - {'error': {'message': 'This model does not support image', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}
+2026-08-27 10:54:19,090 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-08-27 10:54:19,102 [WARNING] app.services.ocr: [VLM] 图片描述失败: Error code: 400 - {'error': {'message': 'This model does not support image', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}
+2026-08-27 10:54:19,205 [WARNING] app.services.ocr: [OCR] 图片提取失败 (第16页): page 15 not in document
+2026-08-27 10:54:19,205 [INFO] app.services.loader: [Document Loader] PDF 加载完成: e6cc68841b834381a48d41220ec8d0d2.pdf, 共 15 页
+2026-08-27 10:54:19,469 [INFO] app.services.splitter: [Text Splitter] 切分完成: 15 个源文档 → 16 个 chunk (file_type=pdf, strategy=token, chunk_size=1000, overlap=200)
+2026-08-27 10:54:20,093 [INFO] httpx: HTTP Request: POST https://open.bigmodel.cn/api/paas/v4/embeddings "HTTP/1.1 200 OK"
+2026-08-27 10:54:20,424 [INFO] httpx: HTTP Request: POST https://open.bigmodel.cn/api/paas/v4/embeddings "HTTP/1.1 200 OK"
+2026-08-27 10:54:20,526 [INFO] app.services.vectorstore: [VectorStore] 入库完成: 共 16 个 ID（16 个 chunk, owner=ZJiaYi106）
+Building prefix dict from the default dictionary ...
+2026-08-27 10:54:20,546 [DEBUG] jieba: Building prefix dict from the default dictionary ...
+Dumping model to file cache C:\Users\31133\AppData\Local\Temp\jieba.cache
+2026-08-27 10:54:21,110 [DEBUG] jieba: Dumping model to file cache C:\Users\31133\AppData\Local\Temp\jieba.cache
+Loading model cost 0.619 seconds.
+2026-08-27 10:54:21,166 [DEBUG] jieba: Loading model cost 0.619 seconds.
+Prefix dict has been built successfully.
+2026-08-27 10:54:21,166 [DEBUG] jieba: Prefix dict has been built successfully.
+2026-08-27 10:54:21,256 [INFO] app.services.retrievers.bm25_retriever: [BM25] 已添加 16 个 chunk，索引总数: 16
+2026-08-27 10:54:21,256 [INFO] app.utils.hash_store: [HashStore] 已记录: 1706.03762v7.pdf (key=bdfaa68d8984f0dc02beaca527b76f20...)
+2026-08-27 10:54:21,265 [INFO] app.utils.registry: [Registry] 已记录文档: 1706.03762v7.pdf (id=ab778218620c479c8046fb2f06dcdc44)
+2026-08-27 10:54:21,265 [INFO] app.routers.documents: [上传] 完成: 1706.03762v7.pdf (15 页/节 → 16 chunks → 16 向量)
+2026-08-27 10:54:21,289 [INFO] app.routers.documents: [列表] 返回 1 个文档
+2026-08-27 10:54:21,295 [INFO] app.routers.documents: [列表] 返回 1 个文档
+2026-08-27 10:54:33,079 [INFO] app.routers.chat: [问答SSE] 收到提问: 请你简述attention...
+2026-08-27 10:54:33,083 [INFO] app.services.chain: [Progress] route: 正在分析问题类型并改写查询...
+2026-08-27 10:54:33,374 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-27 10:54:33,379 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-27 10:54:33,404 [INFO] httpx: HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-27 10:54:33,713 [INFO] app.services.router: [Router] 问题分类: 请你简述attention... → summary
+2026-08-27 10:54:34,598 [INFO] app.services.query_rewriter: [Rewriter] LLM 改写生成 3 条
+2026-08-27 10:54:35,774 [INFO] app.services.query_rewriter: [Rewriter] HyDE 生成: 注意力机制（Attention Mechanism）通过计算查询向量与键向量之间的相似度，对值向量进行加权求和，从而动态聚焦于输入序列中与当前任务最相关的部分。...
+2026-08-27 10:54:35,789 [INFO] app.services.chain: [Progress] rewrite: 问题分类: summary，改写 3 条查询，启动多路召回
+2026-08-27 10:54:35,789 [INFO] app.services.chain: [Progress] search: 正在执行语义检索 + 关键词检索...
+2026-08-27 10:54:36,059 [INFO] httpx: HTTP Request: POST https://open.bigmodel.cn/api/paas/v4/embeddings "HTTP/1.1 200 OK"
+2026-08-27 10:54:36,063 [ERROR] chromadb.telemetry.product.posthog: Failed to send telemetry event CollectionQueryEvent: capture() takes 1 positional argument but 3 were given
+2026-08-27 10:54:36,073 [WARNING] chromadb.segment.impl.vector.local_persistent_hnsw: Number of requested results 30 is greater than number of elements in index 16, updating n_results = 16
+2026-08-27 10:54:36,082 [INFO] app.services.vectorstore: [VectorStore] 检索完成: query='请你简述attention...', 返回 16 条结果
+2026-08-27 10:54:36,082 [INFO] app.services.retrievers.dense_retriever: [Dense] 检索完成，返回 16 条结果
+2026-08-27 10:54:36,082 [INFO] app.services.hybrid_searcher: [HybridSearch] Dense 召回: 16 条
+2026-08-27 10:54:36,082 [INFO] app.services.hybrid_searcher: [HybridSearch] 检索完成: 召回 16 → 融合 16 → 最终 10 条
+2026-08-27 10:54:36,223 [INFO] httpx: HTTP Request: POST https://open.bigmodel.cn/api/paas/v4/embeddings "HTTP/1.1 200 OK"
+2026-08-27 10:54:36,239 [WARNING] chromadb.segment.impl.vector.local_persistent_hnsw: Number of requested results 30 is greater than number of elements in index 16, updating n_results = 16
+2026-08-27 10:54:36,239 [INFO] app.services.vectorstore: [VectorStore] 检索完成: query='1. 请简要介绍注意力机制（Attention Mechan...', 返回 16 条结果
+2026-08-27 10:54:36,239 [INFO] app.services.retrievers.dense_retriever: [Dense] 检索完成，返回 16 条结果
+2026-08-27 10:54:36,239 [INFO] app.services.hybrid_searcher: [HybridSearch] Dense 召回: 16 条
+2026-08-27 10:54:36,239 [INFO] app.services.hybrid_searcher: [HybridSearch] 检索完成: 召回 16 → 融合 16 → 最终 10 条
+2026-08-27 10:54:36,410 [INFO] httpx: HTTP Request: POST https://open.bigmodel.cn/api/paas/v4/embeddings "HTTP/1.1 200 OK"
+2026-08-27 10:54:36,420 [WARNING] chromadb.segment.impl.vector.local_persistent_hnsw: Number of requested results 30 is greater than number of elements in index 16, updating n_results = 16
+2026-08-27 10:54:36,426 [INFO] app.services.vectorstore: [VectorStore] 检索完成: query='2. 注意力机制（Attention Mechanism）的...', 返回 16 条结果
+2026-08-27 10:54:36,426 [INFO] app.services.retrievers.dense_retriever: [Dense] 检索完成，返回 16 条结果
+2026-08-27 10:54:36,427 [INFO] app.services.hybrid_searcher: [HybridSearch] Dense 召回: 16 条
+2026-08-27 10:54:36,427 [INFO] app.services.hybrid_searcher: [HybridSearch] 检索完成: 召回 16 → 融合 16 → 最终 10 条
+2026-08-27 10:54:36,428 [INFO] app.services.chain: [Progress] search: 多路召回完成，共 13 条候选
+2026-08-27 10:54:36,428 [INFO] app.services.chain: [Progress] rerank: 正在 Cross-Encoder 精排 10 条候选...
+2026-08-27 10:54:36,429 [INFO] app.services.reranker: [Reranker] 正在加载 BAAI/bge-reranker-v2-m3 模型...
+2026-08-27 10:54:47,323 [INFO] sentence_transformers.base.model: No device provided, using cpu
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa500>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 5853e468-d5f3-4d05-bad1-a6e51c49b7ca)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:55:07,388 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa500>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 5853e468-d5f3-4d05-bad1-a6e51c49b7ca)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+Retrying in 1s [Retry 1/5].
+2026-08-27 10:55:07,392 [WARNING] huggingface_hub.utils._http: Retrying in 1s [Retry 1/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9180>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 4355012f-b9f4-47aa-8e91-b281dad4c515)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:55:28,416 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9180>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 4355012f-b9f4-47aa-8e91-b281dad4c515)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+Retrying in 2s [Retry 2/5].
+2026-08-27 10:55:28,425 [WARNING] huggingface_hub.utils._http: Retrying in 2s [Retry 2/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9480>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 5b5b7bf4-7a7f-4059-904d-766449e25560)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:55:50,474 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9480>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 5b5b7bf4-7a7f-4059-904d-766449e25560)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+Retrying in 4s [Retry 3/5].
+2026-08-27 10:55:50,484 [WARNING] huggingface_hub.utils._http: Retrying in 4s [Retry 3/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda97e0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 3627a7ec-622a-457e-8a41-73969ec78ffb)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:56:14,502 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda97e0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 3627a7ec-622a-457e-8a41-73969ec78ffb)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+Retrying in 8s [Retry 4/5].
+2026-08-27 10:56:14,502 [WARNING] huggingface_hub.utils._http: Retrying in 8s [Retry 4/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9ae0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 7821a793-3d22-46d8-9dda-d4c4dcb83547)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:56:42,547 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9ae0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 7821a793-3d22-46d8-9dda-d4c4dcb83547)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+Retrying in 8s [Retry 5/5].
+2026-08-27 10:56:42,557 [WARNING] huggingface_hub.utils._http: Retrying in 8s [Retry 5/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9de0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 46f018f6-523f-4699-b807-27029570ee58)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:57:10,611 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/modules.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda9de0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 46f018f6-523f-4699-b807-27029570ee58)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/./modules.json
+2026-08-27 10:57:10,623 [INFO] sentence_transformers.base.model: No modules.json found for BAAI/bge-reranker-v2-m3, initializing a new CrossEncoder model.
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda97b0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a9467c60-fe4e-4a58-a3fe-5b8d5dea889b)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 10:58:13,181 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda97b0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a9467c60-fe4e-4a58-a3fe-5b8d5dea889b)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+Retrying in 1s [Retry 1/5].
+2026-08-27 10:58:13,190 [WARNING] huggingface_hub.utils._http: Retrying in 1s [Retry 1/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda8e80>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 58718404-aab5-470a-aade-d2a6249223d0)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 10:58:34,212 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cda8e80>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 58718404-aab5-470a-aade-d2a6249223d0)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+Retrying in 2s [Retry 2/5].
+2026-08-27 10:58:34,222 [WARNING] huggingface_hub.utils._http: Retrying in 2s [Retry 2/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa020>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: ab392a8f-06ac-4957-882d-885f051c453e)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 10:58:57,261 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa020>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: ab392a8f-06ac-4957-882d-885f051c453e)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+Retrying in 4s [Retry 3/5].
+2026-08-27 10:58:57,271 [WARNING] huggingface_hub.utils._http: Retrying in 4s [Retry 3/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa320>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a66756bc-ef91-428a-880a-d6f063d04fa3)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 10:59:21,827 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa320>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a66756bc-ef91-428a-880a-d6f063d04fa3)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+Retrying in 8s [Retry 4/5].
+2026-08-27 10:59:21,839 [WARNING] huggingface_hub.utils._http: Retrying in 8s [Retry 4/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa7d0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a81484f8-5fa1-4aec-990e-e515aca8ca94)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 10:59:49,894 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaa7d0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: a81484f8-5fa1-4aec-990e-e515aca8ca94)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+Retrying in 8s [Retry 5/5].
+2026-08-27 10:59:49,904 [WARNING] huggingface_hub.utils._http: Retrying in 8s [Retry 5/5].
+'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaaad0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: e3a2d093-0b29-4ba5-a886-f612a5eb2e82)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+2026-08-27 11:00:17,919 [WARNING] huggingface_hub.utils._http: '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaaad0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: e3a2d093-0b29-4ba5-a886-f612a5eb2e82)')' thrown while requesting HEAD https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/config.json
+ERROR:    Exception in ASGI application
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\Study\Python\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+  |     result = await app(  # type: ignore[func-returns-value]
+  |   File "D:\Study\Python\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+  |     return await self.app(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+  |     await super().__call__(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\applications.py", line 113, in __call__
+  |     await self.middleware_stack(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+  |     raise exc
+  |   File "D:\Study\Python\lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+  |     await self.app(scope, receive, _send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
+  |     await self.simple_response(scope, receive, send, request_headers=headers)
+  |   File "D:\Study\Python\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+  |     await self.app(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+  |     raise exc
+  |   File "D:\Study\Python\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+  |     await app(scope, receive, sender)
+  |   File "D:\Study\Python\lib\site-packages\starlette\routing.py", line 715, in __call__
+  |     await self.middleware_stack(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\routing.py", line 735, in app
+  |     await route.handle(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\routing.py", line 288, in handle
+  |     await self.app(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\routing.py", line 76, in app
+  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+  |     raise exc
+  |   File "D:\Study\Python\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+  |     await app(scope, receive, sender)
+  |   File "D:\Study\Python\lib\site-packages\starlette\routing.py", line 74, in app
+  |     await response(scope, receive, send)
+  |   File "D:\Study\Python\lib\site-packages\starlette\responses.py", line 252, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |   File "D:\Study\Python\lib\site-packages\anyio\_backends\_asyncio.py", line 815, in __aexit__
+  |     raise BaseExceptionGroup(
+  | exceptiongroup.ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connection.py", line 204, in _new_conn
+    |     sock = connection.create_connection(
+    |   File "D:\Study\Python\lib\site-packages\urllib3\util\connection.py", line 85, in create_connection
+    |     raise err
+    |   File "D:\Study\Python\lib\site-packages\urllib3\util\connection.py", line 73, in create_connection
+    |     sock.connect(sa)
+    | TimeoutError: timed out
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    |     response = self._make_request(
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    |     raise new_e
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    |     self._validate_conn(conn)
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connectionpool.py", line 1106, in _validate_conn
+    |     conn.connect()
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connection.py", line 759, in connect
+    |     self.sock = sock = self._new_conn()
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connection.py", line 213, in _new_conn
+    |     raise ConnectTimeoutError(
+    | urllib3.exceptions.ConnectTimeoutError: (<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaaad0>, 'Connection to huggingface.co timed out. (connect timeout=10)')
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\requests\adapters.py", line 696, in send
+    |     resp = conn.urlopen(
+    |   File "D:\Study\Python\lib\site-packages\urllib3\connectionpool.py", line 842, in urlopen
+    |     retries = retries.increment(
+    |   File "D:\Study\Python\lib\site-packages\urllib3\util\retry.py", line 543, in increment
+    |     raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    | urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaaad0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))
+    | 
+    | During handling of the above exception, another exception occurred:
+    | 
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 1550, in _get_metadata_or_catch_error
+    |     metadata = get_hf_file_metadata(
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\utils\_validators.py", line 114, in _inner_fn
+    |     return fn(*args, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 1467, in get_hf_file_metadata
+    |     r = _request_wrapper(
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 283, in _request_wrapper
+    |     response = _request_wrapper(
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 306, in _request_wrapper
+    |     response = http_backoff(method=method, url=url, **params)
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\utils\_http.py", line 326, in http_backoff
+    |     raise err
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\utils\_http.py", line 307, in http_backoff
+    |     response = session.request(method=method, url=url, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\requests\sessions.py", line 651, in request
+    |     resp = self.send(prep, **send_kwargs)
+    |   File "D:\Study\Python\lib\site-packages\requests\sessions.py", line 784, in send
+    |     r = adapter.send(request, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\utils\_http.py", line 96, in send
+    |     return super().send(request, *args, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\requests\adapters.py", line 717, in send
+    |     raise ConnectTimeout(e, request=request)
+    | requests.exceptions.ConnectTimeout: (MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /BAAI/bge-reranker-v2-m3/resolve/main/config.json (Caused by ConnectTimeoutError(<HTTPSConnection(host='huggingface.co', port=443) at 0x1a23cdaaad0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: e3a2d093-0b29-4ba5-a886-f612a5eb2e82)')
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\transformers\utils\hub.py", line 403, in cached_file
+    |     resolved_file = hf_hub_download(
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\utils\_validators.py", line 114, in _inner_fn
+    |     return fn(*args, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 1014, in hf_hub_download
+    |     return _hf_hub_download_to_cache_dir(
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 1121, in _hf_hub_download_to_cache_dir
+    |     _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+    |   File "D:\Study\Python\lib\site-packages\huggingface_hub\file_download.py", line 1665, in _raise_on_head_call_error
+    |     raise LocalEntryNotFoundError(
+    | huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on.
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "D:\Study\Python\lib\site-packages\anyio\_core\_tasks.py", line 275, in _run_coro
+    |     retval = await self._coro
+    |   File "D:\Study\Python\lib\site-packages\starlette\responses.py", line 255, in wrap
+    |     await func()
+    |   File "D:\Study\Python\lib\site-packages\starlette\responses.py", line 244, in stream_response
+    |     async for chunk in self.body_iterator:
+    |   File "C:\Users\31133\Desktop\StudyRag\backend\app\services\chain.py", line 132, in ask_stream
+    |     retrieved = future.result()
+    |   File "D:\Study\Python\lib\concurrent\futures\thread.py", line 58, in run
+    |     result = self.fn(*self.args, **self.kwargs)
+    |   File "C:\Users\31133\Desktop\StudyRag\backend\app\services\chain.py", line 88, in _full_search_sync
+    |     final = reranker.rerank(query, candidates, top_k=search_top_k)
+    |   File "C:\Users\31133\Desktop\StudyRag\backend\app\services\reranker.py", line 56, in rerank
+    |     model = _get_model()
+    |   File "C:\Users\31133\Desktop\StudyRag\backend\app\services\reranker.py", line 32, in _get_model
+    |     _reranker_model = CrossEncoder(
+    |   File "D:\Study\Python\lib\site-packages\sentence_transformers\util\decorators.py", line 160, in wrapper
+    |     return func(self, *args, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\sentence_transformers\cross_encoder\model.py", line 186, in __init__
+    |     super().__init__(
+    |   File "D:\Study\Python\lib\site-packages\sentence_transformers\base\model.py", line 216, in __init__
+    |     modules, self.module_kwargs = self._load_modules(
+    |   File "D:\Study\Python\lib\site-packages\sentence_transformers\base\model.py", line 991, in _load_modules
+    |     return self._load_default_modules(model_name_or_path, **load_kwargs)
+    |   File "D:\Study\Python\lib\site-packages\sentence_transformers\cross_encoder\model.py", line 237, in _load_default_modules
+    |     config: PretrainedConfig = AutoConfig.from_pretrained(
+    |   File "D:\Study\Python\lib\site-packages\transformers\models\auto\configuration_auto.py", line 1017, in from_pretrained
+    |     config_dict, unused_kwargs = PretrainedConfig.get_config_dict(pretrained_model_name_or_path, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\transformers\configuration_utils.py", line 574, in get_config_dict
+    |     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+    |   File "D:\Study\Python\lib\site-packages\transformers\configuration_utils.py", line 633, in _get_config_dict
+    |     resolved_config_file = cached_file(
+    |   File "D:\Study\Python\lib\site-packages\transformers\utils\hub.py", line 446, in cached_file
+    |     raise EnvironmentError(
+    | OSError: We couldn't connect to 'https://huggingface.co' to load this file, couldn't find it in the cached files and it looks like BAAI/bge-reranker-v2-m3 is not the path to a directory containing a file named config.json.
+    | Checkout your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.
+    +------------------------------------

@@ -14,6 +14,7 @@ Cross-Encoder 重排序器
 import logging
 from typing import List, Optional
 
+from app.config import settings
 from app.services.interfaces import BaseReranker
 from app.models.search import SearchResult
 
@@ -27,10 +28,11 @@ def _get_model():
     """懒加载 Cross-Encoder 模型"""
     global _reranker_model
     if _reranker_model is None:
-        logger.info("[Reranker] 正在加载 BAAI/bge-reranker-v2-m3 模型...")
+        model_source = settings.rerank_model_path
+        logger.info(f"[Reranker] 正在加载模型: {model_source} ...")
         from sentence_transformers import CrossEncoder
         _reranker_model = CrossEncoder(
-            "BAAI/bge-reranker-v2-m3",
+            model_source,
             trust_remote_code=True,
         )
         logger.info("[Reranker] 模型加载完成")
