@@ -112,10 +112,16 @@ def describe_image_vlm(image_bytes: bytes, prompt: Optional[str] = None) -> str:
         from langchain_openai import ChatOpenAI
         from langchain_core.messages import HumanMessage
 
+        # VLM 必须是支持图片输入的模型（如 glm-4v-flash），
+        # 不能复用 llm_model（deepseek-chat 等纯文本模型会报错）
+        # vlm_api_key 未配置时回退到 embedding_api_key（同平台可复用）
+        # 注意：SecretStr 掩码恒为真值，必须用 get_secret_value() 判空
+        vlm_key = settings.vlm_api_key.get_secret_value()
+        api_key = vlm_key if vlm_key else settings.embedding_api_key.get_secret_value()
         llm = ChatOpenAI(
-            model=settings.llm_model,
-            openai_api_key=settings.llm_api_key.get_secret_value(),
-            openai_api_base=settings.llm_api_base,
+            model=settings.vlm_model,
+            openai_api_key=api_key,
+            openai_api_base=settings.vlm_api_base,
             temperature=0.1,
             max_tokens=500,
         )

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import documents, chat, auth, eval as eval_router
+from app.routers import documents, chat, auth, eval as eval_router, reranker
 
 # --- 日志配置 ---
 logging.basicConfig(
@@ -57,6 +57,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"BM25 索引重建失败（不影响主流程）: {e}")
 
+    # 按配置自动加载重排模型（生产环境用；非阻塞，后台线程执行）
+    # 本地开发默认关闭；生产服务器设 RERANK_AUTOLOAD=true，启动后秒级读本地缓存加载
+    if settings.rerank_autoload:
+        try:
+            from app.services.reranker import get_reranker_service
+            started = get_reranker_service().start_load(settings.rerank_model_path)
+            if started:
+                logger.info(f"重排模型自动加载已触发（后台进行）: {settings.rerank_model_path}")
+        except Exception as e:
+            logger.warning(f"重排模型自动加载触发失败（不影响主流程）: {e}")
+
     logger.info("=" * 50)
     yield
     # 关闭时
@@ -86,6 +97,7 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(eval_router.router)
+app.include_router(reranker.router)
 
 
 # --- 健康检查端点 ---

@@ -39,8 +39,8 @@ async def run_evaluation(user: str = Depends(get_current_user)):
         question = item["question"]
         ground_truth = item.get("ground_truth", "")
 
-        # 执行 RAG 问答（限定当前用户知识库）
-        rag_result = ask(question, owner=user)
+        # 执行 RAG 问答（限定当前用户知识库；ask 为异步函数，await 调用避免阻塞事件循环）
+        rag_result = await ask(question, owner=user)
         answer = rag_result["answer"]
         contexts = [s["content"] for s in rag_result["sources"]]
 

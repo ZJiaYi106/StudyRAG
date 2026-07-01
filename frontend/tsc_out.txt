@@ -1,0 +1,6 @@
+﻿
+
+--- LINT ---
+Found 0 warnings and 0 errors.
+Finished in 49ms on 4 files with 103 rules using 16 threads.
+

@@ -17,9 +17,16 @@ export default function ChatPanel({ hasDocuments }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [streamText, setStreamText] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, progress]);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // 仅当用户本来就在底部附近时才自动滚动，避免打断回看历史消息
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    if (nearBottom) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, progress, streamText]);
 
   const handleSend = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -27,21 +34,23 @@ export default function ChatPanel({ hasDocuments }: Props) {
     if (!question || loading) return;
     setInput(""); setError(null); setLoading(true);
     setProgress({ step: "start", message: "正在处理…" });
+    setStreamText("");
 
     await askQuestionStream(
       { question },
       (evt) => setProgress(evt),
+      (delta) => setStreamText((prev) => prev + delta),
       (answer, sources) => {
         setMessages(prev => [...prev, { question, answer, sources }]);
-        setLoading(false); setProgress(null);
+        setLoading(false); setProgress(null); setStreamText("");
       },
-      (err) => { setError(err); setLoading(false); setProgress(null); },
+      (err) => { setError(err); setLoading(false); setProgress(null); setStreamText(""); },
     );
   };
 
   return (
     <div className="chat-panel-inner">
-      <div className="messages-container">
+      <div className="messages-container" ref={containerRef}>
         {messages.length > 0 && (
           <div className="chat-toolbar">
             <span>{messages.length} 轮对话</span>
@@ -58,7 +67,13 @@ export default function ChatPanel({ hasDocuments }: Props) {
         )}
         {messages.map((msg, i) => (<MessageBubble key={i} message={msg} />))}
 
-        {loading && progress && (
+        {loading && (streamText ? (
+          <div className="message ai-message">
+            <div className="message-bubble ai-bubble streaming-bubble" style={{ minWidth: 280 }}>
+              <p className="streaming-text">{streamText}<span className="streaming-caret">▋</span></p>
+            </div>
+          </div>
+        ) : progress && (
           <div className="message ai-message">
             <div className="message-bubble ai-bubble" style={{ minWidth: 280 }}>
               <div className="progress-bar-container">
@@ -89,9 +104,8 @@ export default function ChatPanel({ hasDocuments }: Props) {
               </div>
             </div>
           </div>
-        )}
+        ))}
         {error && <p className="upload-error" style={{ margin: "0 24px" }}>{error}</p>}
-        <div ref={bottomRef} />
       </div>
 
       <form className="chat-input-area" onSubmit={handleSend}>

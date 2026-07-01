@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     embedding_api_base: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
 
+    # --- VLM 视觉模型配置（图片理解，OpenAI API 兼容接口） ---
+    # 用于 OCR 增强中的图表/插图内容描述；必须选择支持图片输入的模型
+    # （如智谱 glm-4v-flash，免费；llm_model 是纯文本模型，不可复用）
+    # vlm_api_key 不填时回退到 embedding_api_key（同一智谱平台可直接复用）
+    vlm_api_key: SecretStr = SecretStr("")
+    vlm_api_base: str = "https://open.bigmodel.cn/api/paas/v4"
+    vlm_model: str = "glm-4v-flash"
+
     # --- Chroma 向量数据库 ---
     chroma_mode: str = "embedded"      # "embedded"（本地）或 "remote"（Docker 服务）
     chroma_host: str = "chroma"        # remote 模式下的主机名
@@ -56,6 +64,10 @@ class Settings(BaseSettings):
     hybrid_enable_sparse: bool = True       # BM25 关键词检索
     hybrid_enable_rerank: bool = True       # Cross-Encoder 重排（首次需下载 2.27GB 模型）
     rerank_model_path: str = "BAAI/bge-reranker-v2-m3"  # 重排模型：HF 模型名或本地目录
+    # 服务启动时是否自动加载重排模型进内存。
+    # 本地开发建议 False（前端手动点加载，避免首次下载阻塞/被 --reload 中断）；
+    # 生产服务器建议 True（需先预下载模型到 HF 缓存，启动后秒级读本地加载）。
+    rerank_autoload: bool = False
 
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

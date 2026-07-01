@@ -10,6 +10,7 @@ import AuthPage from "./components/AuthPage";
 import FileUpload from "./components/FileUpload";
 import DocList from "./components/DocList";
 import ChatPanel from "./components/ChatPanel";
+import RerankerPanel from "./components/RerankerPanel";
 import ThemeToggle, { type Theme } from "./components/ThemeToggle";
 
 const THEME_KEY = "studyarag-theme";
@@ -191,6 +192,10 @@ function App() {
                 <span className="section-symbol">•••</span>
               </div>
               <DocList refreshKey={refreshKey} />
+            </section>
+
+            <section className="reranker-section">
+              <RerankerPanel />
             </section>
           </div>
         </aside>

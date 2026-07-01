@@ -45,7 +45,7 @@ async def chat(request: ChatRequest, user: str = Depends(get_current_user)):
 
     # 执行 RAG 问答（带 owner 做用户隔离）
     try:
-        result = ask(request.question, owner=user)
+        result = await ask(request.question, owner=user)
     except Exception as e:
         logger.error(f"[问答] RAG Chain 执行失败: {e}")
         raise HTTPException(

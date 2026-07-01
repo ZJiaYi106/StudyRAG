@@ -100,3 +100,22 @@ export interface HealthStatus {
   chroma?: string;
   document_count?: number;
 }
+
+/** 重排模型选项 */
+export interface RerankerModelOption {
+  id: string;
+  path: string;
+  name: string;
+  size: string;
+  desc: string;
+  recommended?: boolean;
+}
+
+/** 重排模型状态 */
+export interface RerankerStatus {
+  loaded: boolean;
+  loading: boolean;
+  model: string | null;
+  error: string | null;
+  available: RerankerModelOption[];
+}

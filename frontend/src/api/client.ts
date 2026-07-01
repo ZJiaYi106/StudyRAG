@@ -15,6 +15,7 @@ import type {
   LoginRequest,
   TokenResponse,
   UserInfo,
+  RerankerStatus,
 } from "../types";
 
 // 后端 API 地址
@@ -202,18 +203,47 @@ export async function askQuestion(body: ChatRequest): Promise<ChatResponse> {
   });
 }
 
+// ================================================================
+// 重排模型管理 API
+// ================================================================
+
+/** 查询重排模型状态（是否已加载 / 加载中 / 错误 / 可选模型） */
+export async function getRerankerStatus(): Promise<RerankerStatus> {
+  return request<RerankerStatus>("/api/reranker/status");
+}
+
+/** 触发模型加载（异步，立即返回；前端轮询 /status 直到 loading=false） */
+export async function loadReranker(
+  model?: string
+): Promise<{ loading: boolean; model: string }> {
+  return request<{ loading: boolean; model: string }>("/api/reranker/load", {
+    method: "POST",
+    body: JSON.stringify(model ? { model } : {}),
+  });
+}
+
+/** 卸载已加载的重排模型 */
+export async function unloadReranker(): Promise<RerankerStatus> {
+  return request<RerankerStatus>("/api/reranker/unload", {
+    method: "POST",
+  });
+}
+
 /** SSE 进度事件 */
 export interface ProgressEvent {
   step: string;
-  message: string;
+  message?: string;
   answer?: string;
   sources?: ChatResponse["sources"];
+  /** token 流式事件的增量文本 */
+  content?: string;
 }
 
-/** 流式提问（SSE），支持进度回调 */
+/** 流式提问（SSE），支持进度回调 + 逐 token 渲染 */
 export async function askQuestionStream(
   body: ChatRequest,
   onProgress: (evt: ProgressEvent) => void,
+  onToken: (delta: string) => void,
   onDone: (answer: string, sources: ChatResponse["sources"]) => void,
   onError: (err: string) => void,
 ): Promise<void> {
@@ -253,6 +283,10 @@ export async function askQuestionStream(
           const data = JSON.parse(line.slice(6)) as ProgressEvent;
           if (data.step === "result") {
             onDone(data.answer || "", data.sources || []);
+          } else if (data.step === "token" && data.content) {
+            onToken(data.content);
+          } else if (data.step === "error") {
+            onError(data.message || "问答失败");
           } else {
             onProgress(data);
           }
